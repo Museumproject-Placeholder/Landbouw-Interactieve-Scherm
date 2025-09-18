@@ -1,6 +1,6 @@
 # Museum Landbouw Project
 # Stack
-React + Vite + TailwindCSS
+React + Vite + TailwindCSS + PostCSS (?)
 
 # Prerequisites
 - nodejs (v22.19.0) met npm
