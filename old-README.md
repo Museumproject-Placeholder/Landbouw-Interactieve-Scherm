@@ -12,7 +12,7 @@
 # Setup
 ```bash
 git clone git@github.com:Museumproject-Placeholder/Landbouw-Interactieve-Scherm.git
-cd Landbouw-Interactieve-Scherm.
+cd Landbouw-Interactieve-Scherm
 cd frontend/
 npm install (Installs Tailwind etc)
 ```
