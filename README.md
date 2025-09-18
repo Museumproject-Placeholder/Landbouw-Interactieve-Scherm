@@ -14,7 +14,7 @@
 1. **Clone the repository:**
 ```bash
 git clone <repository-url>
-cd museum-laandbouw
+cd Landbouw-Interactieve-Scherm
 ```
 2. **Set up the frontend:**
 ```bash
