@@ -1,17 +1,5 @@
 # Landbouw Museum Interactive Display
 
-A comprehensive React.js and Node.js application for museum interactive displays, showcasing the history of agriculture through an engaging timeline interface.
-
-## 🏛️ Project Overview
-
-This interactive museum display application allows visitors to explore the evolution of farming from ancient times to the modern era. The system includes:
-
-- **Interactive Timeline**: Touch-friendly timeline interface
-- **Detailed Content Pages**: Rich media content with images, text, and interactive elements
-- **Admin Panel**: Content management system for museum staff
-- **Responsive Design**: Works on various screen sizes and touch devices
-- **Database Integration**: MySQL backend with REST API
-
 ## 🏗️ Architecture
 
 ```
@@ -42,7 +30,7 @@ museum-laandbouw/
 ### Prerequisites
 
 - Node.js 18+ and npm
-- MySQL 8.0+ or MariaDB 10.3+
+- MySQL 8.0+
 - Git
 
 ### Installation
@@ -115,37 +103,6 @@ The application automatically creates the following tables:
 ### `activity_logs`
 - Admin activity logging for content management
 - Fields: id, type, description, user_id, details
-
-## 🎨 Features
-
-### Timeline Interface
-- Interactive touch-friendly timeline
-- Smooth animations and transitions
-- Era-based color coding
-- Search and filtering capabilities
-
-### Content Management
-- Rich content editor with multiple block types:
-  - Text blocks with formatting
-  - Image galleries with captions
-  - Timeline events
-  - Comparison blocks
-  - Quote blocks
-- Drag-and-drop reordering
-- Content preview and publishing
-
-### Admin Dashboard
-- Real-time statistics and analytics
-- Content overview and management
-- System health monitoring
-- Activity logging and audit trails
-- Data export functionality
-
-### Responsive Design
-- Optimized for museum kiosk displays
-- Touch-friendly interface
-- High contrast mode for accessibility
-- Multiple screen size support
 
 ## 📡 API Endpoints
 
@@ -297,29 +254,6 @@ EXPOSE 5000
 CMD ["npm", "start"]
 ```
 
-## 🔒 Security Features
-
-- Rate limiting on API endpoints
-- CORS configuration
-- Input validation and sanitization
-- SQL injection prevention
-- XSS protection headers
-- Environment variable management
-
-## 📊 Monitoring & Analytics
-
-### Built-in Analytics
-- Page view tracking
-- Session duration monitoring
-- Popular content identification
-- User interaction patterns
-
-### Health Monitoring
-- Database connection status
-- Server performance metrics
-- Error logging and tracking
-- Automated health checks
-
 ## 🧪 Testing
 
 ```bash
@@ -374,18 +308,3 @@ npm test
 - Optimize database queries with proper indexing
 - Use CDN for static assets
 - Implement lazy loading for images
-
-## 📄 License
-
-This project is licensed under the ISC License - see the LICENSE file for details.
-
-## 👥 Support
-
-For support and questions:
-- Create an issue in the repository
-- Check the troubleshooting section above
-- Review the API documentation
-
----
-
-**Built with ❤️ for museums and cultural institutions**
