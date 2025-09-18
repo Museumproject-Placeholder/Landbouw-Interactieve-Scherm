@@ -18,15 +18,6 @@ museum-laandbouw/
 - React Router for navigation
 - Axios for API calls
 
-**Backend:**
-- Node.js with Express.js
-- MySQL2 for database connectivity
-- RESTful API design
-- Comprehensive error handling
-- Rate limiting and security middleware
-
-## 🚀 Quick Start
-
 ### Prerequisites
 
 - Node.js 18+ and npm
@@ -40,101 +31,17 @@ museum-laandbouw/
 git clone <repository-url>
 cd museum-laandbouw
 ```
-
-2. **Set up the backend:**
-```bash
-cd backend
-npm install
-```
-
-3. **Configure the database:**
-   - Create a MySQL database named `museum_laandbouw`
-   - Create a user with appropriate permissions:
-```sql
-CREATE DATABASE museum_laandbouw CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'museum_user'@'localhost' IDENTIFIED BY 'museum_password';
-GRANT ALL PRIVILEGES ON museum_laandbouw.* TO 'museum_user'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-4. **Configure environment variables:**
-```bash
-# Copy the example environment file
-cp .env.example .env
-
-# Edit the .env file with your database credentials
-# The app will create tables automatically on first run
-```
-
-5. **Start the backend server:**
-```bash
-npm run dev
-# Server will start on http://localhost:5000
-```
-
-6. **Set up the frontend:**
+2. **Set up the frontend:**
 ```bash
 cd ../frontend
 npm install
 ```
 
-7. **Start the frontend development server:**
+3. **Start the frontend development server:**
 ```bash
 npm run dev
 # Application will open at http://localhost:3000
 ```
-
-## 🗄️ Database Schema
-
-The application automatically creates the following tables:
-
-### `timeline_entries`
-- Stores main timeline periods and basic information
-- Fields: id, era, title, date_range, description, image, tags, order, is_active
-
-### `content_entries`
-- Stores detailed content for each timeline period
-- Fields: id, timeline_id, era, title, subtitle, description, blocks, gallery, tags
-
-### `visit_logs`
-- Analytics data for museum visits and interactions
-- Fields: id, session_id, content_id, page_path, visit_duration
-
-### `activity_logs`
-- Admin activity logging for content management
-- Fields: id, type, description, user_id, details
-
-## 📡 API Endpoints
-
-### Timeline API
-```
-GET    /api/timeline              # Get all timeline entries
-GET    /api/timeline/:id          # Get specific timeline entry
-POST   /api/timeline              # Create new timeline entry
-PUT    /api/timeline/:id          # Update timeline entry
-DELETE /api/timeline/:id          # Delete timeline entry
-GET    /api/timeline/search?q=    # Search timeline entries
-```
-
-### Content API
-```
-GET    /api/content               # Get all content entries
-GET    /api/content/:id           # Get specific content entry
-POST   /api/content               # Create new content entry
-PUT    /api/content/:id           # Update content entry
-DELETE /api/content/:id           # Delete content entry
-GET    /api/content/featured      # Get featured content
-```
-
-### Admin API
-```
-GET    /api/admin/stats           # Dashboard statistics
-GET    /api/admin/health          # System health check
-GET    /api/admin/export          # Export data
-GET    /api/admin/activity-logs   # Activity logs
-```
-
-## 🛠️ Development
 
 ### Frontend Development
 
