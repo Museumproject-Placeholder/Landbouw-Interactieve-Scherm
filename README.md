@@ -12,7 +12,12 @@ React + Vite + TailwindCSS + PostCSS (?)
 # Setup
 ```bash
 git clone git@github.com:v-mstrs/Landbouw-Interactieve-Scherm.git
+
 cd Landbouw-Interactieve-Scherm
+
 cd frontend/
+
 npm install (Installs Tailwind etc)
+
+npm run dev
 ```
