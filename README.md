@@ -1,6 +1,6 @@
 # Landbouw Museum Interactive Display
 
-**Frontend:**
+### Stack
 - React 18+ with JSX
 - Vite for build tooling
 - Tailwind CSS for styling
