@@ -27,29 +27,12 @@ npm run dev
 # Application will open at http://localhost:3000
 ```
 
-### Frontend Development
-
-```bash
-cd frontend
-npm run dev      # Start development server
-npm run build    # Build for production
-npm run preview  # Preview production build
-npm run lint     # Run ESLint
-```
-
 1. **Build the frontend:**
 ```bash
 cd frontend
 npm run build
 ```
 
-
-# Frontend tests (if configured)
-cd frontend
-npm test
-```
-
-## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/new-feature`)
