@@ -10,8 +10,9 @@
 
 
 # Setup
-1. Clone repository using Github Desktop
-2. ...
-3. ...
-4. ...
-5. ...
+```bash
+git clone git@github.com:Museumproject-Placeholder/Landbouw-Interactieve-Scherm.git
+cd Landbouw-Interactieve-Scherm.
+cd frontend/
+npm install (Installs Tailwind etc)
+```
