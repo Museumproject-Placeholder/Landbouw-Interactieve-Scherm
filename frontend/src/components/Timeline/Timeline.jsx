@@ -1,62 +1,103 @@
 import React, { useState, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import TimelineModal from "./TimelineModal"
 
 const Timeline = () => {
   const [selectedPeriod, setSelectedPeriod] = useState(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedTimelineItem, setSelectedTimelineItem] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
   const [startX, setStartX] = useState(0)
   const [scrollLeft, setScrollLeft] = useState(0)
   const timelineRef = useRef(null)
 
-  // Mock data - later replace with database
+  // Fries Landbouwmuseum Timeline - Nederlandse teksten
   const timelineData = [
+    // ETAP 1: Vroegmoderne landbouw (1600-1800)
     {
-      id: "early-agriculture",
-      year: "10,000 BCE",
-      title: "Early Agriculture",
+      id: "golden-age-start",
+      year: "1600",
+      title: "Gouden Eeuw Landbouw",
       description:
-        "The development of farming fundamentally changed human civilization. Early humans transitioned from hunting and gathering to cultivating crops and domesticating animals.",
-      gradient: "from-amber-400 to-orange-500",
+        "De Friese landbouw bloeit tijdens de Nederlandse Gouden Eeuw. Intensieve veeteelt begint en het beroemde Friese vee en paarden krijgen erkenning in heel Europa.",
+      gradient: "from-yellow-500 to-orange-500",
+      stage: 1,
     },
     {
-      id: "irrigation",
-      year: "6,000 BCE",
-      title: "Irrigation Systems",
+      id: "land-reclamation",
+      year: "1650",
+      title: "Landaanwinning Tijdperk",
       description:
-        "Advanced civilizations developed sophisticated irrigation networks, allowing agriculture to flourish in arid regions and supporting larger populations.",
-      gradient: "from-blue-400 to-cyan-500",
+        "Grootschalige drainageprojecten transformeren het Friese landschap. Geavanceerde dijkensystemen en polders creëren nieuw landbouwland en leggen de basis voor moderne landbouw.",
+      gradient: "from-blue-600 to-cyan-500",
+      stage: 1,
     },
     {
-      id: "plowing",
-      year: "4,000 BCE",
-      title: "The Plow Revolution",
+      id: "dairy-development",
+      year: "1750",
+      title: "Zuivelindustrie Fundament",
       description:
-        "The invention of the plow dramatically increased agricultural productivity, enabling farmers to cultivate larger areas more efficiently than ever before.",
-      gradient: "from-green-400 to-emerald-500",
+        "Traditionele kaasmakerij en boterproductie worden de hoekstenen van de Friese economie. Boerenfamilies ontwikkelen gespecialiseerde zuiveltechnieken die generaties lang worden doorgegeven.",
+      gradient: "from-green-600 to-emerald-500",
+      stage: 1,
+    },
+
+    // ETAP 2: Industrialisatie (1800-1950)
+    {
+      id: "flax-boom",
+      year: "1880",
+      title: "Vlasproductie Hoogtepunt",
+      description:
+        "Friesland wordt de grootste vlasproducent van Nederland. Duizenden arbeiders verwerken vlas in 'braakhokken' tijdens de winter, wat cruciale werkgelegenheid biedt op het platteland.",
+      gradient: "from-indigo-500 to-blue-500",
+      stage: 2,
     },
     {
-      id: "mechanization",
-      year: "1850 CE",
-      title: "Mechanization Era",
+      id: "mechanization-start",
+      year: "1900",
+      title: "Landbouwmechanisatie",
       description:
-        "Steam-powered machinery and later tractors revolutionized farming, allowing farmers to work larger areas with significantly less manual labor.",
-      gradient: "from-gray-500 to-slate-600",
+        "Lokale fabrikanten zoals Hermes in Leeuwarden en Miedema in Winsum beginnen met de productie van landbouwwerktuigen, melkmachines en boerenwagens voor de regio.",
+      gradient: "from-gray-600 to-slate-500",
+      stage: 2,
     },
     {
-      id: "modern",
-      year: "1960 CE",
-      title: "Green Revolution",
+      id: "cooperatives-birth",
+      year: "1920",
+      title: "Coöperatieve Beweging",
       description:
-        "High-yield crop varieties, modern irrigation, and intensive farming techniques led to unprecedented increases in food production worldwide.",
-      gradient: "from-emerald-400 to-teal-500",
+        "Boeren stichten de eerste zuivelcoöperaties en landbouwverenigingen. Collectieve koopkracht en gedeelde kennis transformeren traditionele landbouwpraktijken.",
+      gradient: "from-purple-600 to-indigo-500",
+      stage: 2,
+    },
+
+    // ETAP 3: Moderne landbouw (1950-heden)
+    {
+      id: "scientific-breeding",
+      year: "1960",
+      title: "Wetenschappelijke Veeteelt",
+      description:
+        "Kunstmatige inseminatie en wetenschappelijke fokprogramma's revolutioneren de rundverbetering. Het Nationaal Veeteelt Museum documenteert deze transformatie van de Friese landbouw.",
+      gradient: "from-red-500 to-pink-500",
+      stage: 3,
     },
     {
-      id: "sustainable",
-      year: "2000 CE",
-      title: "Sustainable Farming",
+      id: "friesian-renaissance",
+      year: "1990",
+      title: "Fries Paard Wereldsucces",
       description:
-        "Modern agriculture focuses on environmentally sustainable practices, including organic farming, integrated pest management, and climate-smart techniques.",
-      gradient: "from-green-500 to-emerald-600",
+        "Het Friese paard beleeft wereldwijde populariteit. Het Koninklijk Friesch Paarden-Stamboek (KFPS) promoot het ras wereldwijd en maakt het tot een symbool van Nederlands erfgoed.",
+      gradient: "from-purple-600 to-pink-500",
+      stage: 3,
+    },
+    {
+      id: "sustainable-future",
+      year: "2020",
+      title: "Erfgoed & Duurzaamheid",
+      description:
+        "Moderne Friese boerderijen balanceren hightech precisie-landbouw met behoud van traditionele rassen en praktijken. Meer dan 100 zeldzame variëteiten worden behouden voor toekomstige generaties.",
+      gradient: "from-green-500 to-teal-600",
+      stage: 3,
     },
   ]
 
@@ -80,15 +121,23 @@ const Timeline = () => {
 
   const handleCardClick = periodId => {
     if (!isDragging) {
+      const timelineItem = timelineData.find(item => item.id === periodId)
       setSelectedPeriod(periodId)
-      console.log("Navigate to period:", periodId)
+      setSelectedTimelineItem(timelineItem)
+      setIsModalOpen(true)
+      console.log("Navigeer naar periode:", periodId)
     }
+  }
+
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setSelectedTimelineItem(null)
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative flex items-center justify-center">
       <div className="timeline-container py-12 px-4 relative w-full">
-        {/* Timeline Container - no header, no indicators */}
+        {/* Timeline Container - geen header, geen indicatoren */}
         <div
           ref={timelineRef}
           className="relative pb-8 cursor-grab active:cursor-grabbing"
@@ -113,7 +162,7 @@ const Timeline = () => {
             }}
             className="overflow-x-auto"
           >
-            {/* Completely hide all scrollbars */}
+            {/* Verberg alle scrollbars volledig */}
             <style jsx>{`
               div::-webkit-scrollbar {
                 display: none !important;
@@ -126,7 +175,7 @@ const Timeline = () => {
               }
             `}</style>
 
-            {/* Timeline Line */}
+            {/* Timeline Lijn */}
             <div className="absolute top-1/2 transform -translate-y-1/2 h-1 bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 w-full min-w-max shadow-lg shadow-blue-400/50"></div>
 
             {/* Timeline Items */}
@@ -162,7 +211,7 @@ const Timeline = () => {
                       whileTap={{ scale: 0.98 }}
                       transition={{ duration: 0.3 }}
                     >
-                      {/* Year */}
+                      {/* Jaar */}
                       <div className="text-center mb-6">
                         <motion.div
                           className={`text-5xl font-bold bg-gradient-to-r ${period.gradient} bg-clip-text text-transparent filter drop-shadow-lg`}
@@ -175,7 +224,7 @@ const Timeline = () => {
                         </motion.div>
                       </div>
 
-                      {/* Card */}
+                      {/* Kaart */}
                       <motion.div
                         className="relative backdrop-blur-xl bg-white/10 p-8 rounded-3xl border border-white/20 shadow-2xl overflow-hidden"
                         animate={{
@@ -245,6 +294,17 @@ const Timeline = () => {
           </motion.div>
         </div>
       </div>
+
+      {/* Timeline Modal */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <TimelineModal
+            isOpen={isModalOpen}
+            onClose={closeModal}
+            timelineItem={selectedTimelineItem}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
