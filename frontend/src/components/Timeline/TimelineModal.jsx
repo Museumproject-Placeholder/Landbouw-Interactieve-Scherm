@@ -11,11 +11,14 @@
  * - Heeft twee kolommen: links informatie, rechts media content
  */
 
-import React from "react"
+import React, { useState } from "react"
 import { motion } from "framer-motion"
 import { X, Play, Image, Video, Box } from "lucide-react"
+import ImagePuzzleModal from "../PuzzleGame/ImagePuzzleModal"
 
 const TimelineModal = ({ isOpen, onClose, timelineItem }) => {
+  const [isPuzzleOpen, setIsPuzzleOpen] = useState(false)
+
   // Controleer of modal open moet zijn en of er data is
   if (!isOpen || !timelineItem) return null
 
@@ -74,8 +77,8 @@ const TimelineModal = ({ isOpen, onClose, timelineItem }) => {
                       "Informative text about this period will be displayed here. This section provides detailed information about the historical context, significance, and key developments of this era."}
                   </p>
 
-                  {/* Knop voor audio guide (nog geen functionaliteit) */}
-                  <div className="flex space-x-4">
+                  {/* Knoppen voor interactive content */}
+                  <div className="flex flex-col space-y-4">
                     <motion.button
                       className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-cyan-600 transition-all duration-300"
                       whileHover={{ scale: 1.05 }} // Wordt groter bij hover
@@ -84,6 +87,21 @@ const TimelineModal = ({ isOpen, onClose, timelineItem }) => {
                       <Play size={18} />
                       <span>Audio Guide</span>
                     </motion.button>
+
+                    {/* Puzzle Game - dla items z puzzle obrazem */}
+                    {timelineItem.hasPuzzle && (
+                      <motion.button
+                        className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl font-semibold hover:from-green-600 hover:to-blue-600 transition-all duration-300"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => {
+                          setIsPuzzleOpen(true)
+                        }}
+                      >
+                        <Image size={18} />
+                        <span>Speel Puzzle</span>
+                      </motion.button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -153,6 +171,13 @@ const TimelineModal = ({ isOpen, onClose, timelineItem }) => {
           </div>
         </div>
       </motion.div>
+
+      {/* Image Puzzle Modal */}
+      <ImagePuzzleModal
+        isOpen={isPuzzleOpen}
+        onClose={() => setIsPuzzleOpen(false)}
+        puzzleImage={timelineItem?.puzzleImage}
+      />
     </motion.div>
   )
 }

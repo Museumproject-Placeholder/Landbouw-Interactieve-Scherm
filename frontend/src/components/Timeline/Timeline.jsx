@@ -2,6 +2,9 @@ import React, { useState, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import TimelineModal from "./TimelineModal"
 
+// Import puzzle images
+import puzzleImg from "../../assets/images/puzzles/puzzle.jpg"
+
 const Timeline = () => {
   const [selectedPeriod, setSelectedPeriod] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -22,6 +25,8 @@ const Timeline = () => {
         "De Friese landbouw bloeit tijdens de Nederlandse Gouden Eeuw. Intensieve veeteelt begint en het beroemde Friese vee en paarden krijgen erkenning in heel Europa.",
       gradient: "from-yellow-500 to-orange-500",
       stage: 1,
+      hasPuzzle: true,
+      puzzleImage: puzzleImg,
     },
     {
       id: "land-reclamation",
@@ -40,6 +45,8 @@ const Timeline = () => {
         "Traditionele kaasmakerij en boterproductie worden de hoekstenen van de Friese economie. Boerenfamilies ontwikkelen gespecialiseerde zuiveltechnieken die generaties lang worden doorgegeven.",
       gradient: "from-green-600 to-emerald-500",
       stage: 1,
+      hasPuzzle: true,
+      puzzleImage: puzzleImg,
     },
 
     // ETAP 2: Industrialisatie (1800-1950)
@@ -51,6 +58,8 @@ const Timeline = () => {
         "Friesland wordt de grootste vlasproducent van Nederland. Duizenden arbeiders verwerken vlas in 'braakhokken' tijdens de winter, wat cruciale werkgelegenheid biedt op het platteland.",
       gradient: "from-indigo-500 to-blue-500",
       stage: 2,
+      hasPuzzle: true,
+      puzzleImage: puzzleImg,
     },
     {
       id: "mechanization-start",
@@ -69,6 +78,8 @@ const Timeline = () => {
         "Boeren stichten de eerste zuivelcoöperaties en landbouwverenigingen. Collectieve koopkracht en gedeelde kennis transformeren traditionele landbouwpraktijken.",
       gradient: "from-purple-600 to-indigo-500",
       stage: 2,
+      hasPuzzle: true,
+      puzzleImage: puzzleImg,
     },
 
     // ETAP 3: Moderne landbouw (1950-heden)
@@ -89,6 +100,8 @@ const Timeline = () => {
         "Het Friese paard beleeft wereldwijde populariteit. Het Koninklijk Friesch Paarden-Stamboek (KFPS) promoot het ras wereldwijd en maakt het tot een symbool van Nederlands erfgoed.",
       gradient: "from-purple-600 to-pink-500",
       stage: 3,
+      hasPuzzle: true,
+      puzzleImage: puzzleImg,
     },
     {
       id: "sustainable-future",
@@ -98,6 +111,8 @@ const Timeline = () => {
         "Moderne Friese boerderijen balanceren hightech precisie-landbouw met behoud van traditionele rassen en praktijken. Meer dan 100 zeldzame variëteiten worden behouden voor toekomstige generaties.",
       gradient: "from-green-500 to-teal-600",
       stage: 3,
+      hasPuzzle: true,
+      puzzleImage: puzzleImg,
     },
   ]
 
@@ -112,7 +127,9 @@ const Timeline = () => {
     e.preventDefault()
     const x = e.pageX || e.touches[0].pageX
     const walk = (x - startX) * 2
-    timelineRef.current.scrollLeft = scrollLeft - walk
+    const newScrollLeft = scrollLeft - walk
+    timelineRef.current.scrollLeft = newScrollLeft
+
   }
 
   const handleMouseUp = () => {
@@ -132,15 +149,20 @@ const Timeline = () => {
   const closeModal = () => {
     setIsModalOpen(false)
     setSelectedTimelineItem(null)
+    setSelectedPeriod(null)
   }
 
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative flex items-center justify-center">
-      <div className="timeline-container py-12 px-4 relative w-full">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Overlay for better text readability */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/20 to-blue-900/30" />
+
+      <div className="timeline-container py-16 relative w-full h-full z-10">
         {/* Timeline Container - geen header, geen indicatoren */}
         <div
           ref={timelineRef}
-          className="relative pb-8 cursor-grab active:cursor-grabbing"
+          className="relative pb-32 cursor-grab active:cursor-grabbing overflow-hidden"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -151,36 +173,21 @@ const Timeline = () => {
           style={{
             scrollBehavior: isDragging ? "auto" : "smooth",
             userSelect: "none",
-            overflow: "hidden",
           }}
         >
           <motion.div
+            className="overflow-x-auto scrollbar-hide"
             style={{
               scrollbarWidth: "none",
               msOverflowStyle: "none",
-              overflow: "auto",
             }}
-            className="overflow-x-auto"
           >
-            {/* Verberg alle scrollbars volledig */}
-            <style jsx>{`
-              div::-webkit-scrollbar {
-                display: none !important;
-                width: 0 !important;
-                height: 0 !important;
-              }
-              div {
-                -ms-overflow-style: none !important;
-                scrollbar-width: none !important;
-              }
-            `}</style>
-
             {/* Timeline Lijn */}
             <div className="absolute top-1/2 transform -translate-y-1/2 h-1 bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 w-full min-w-max shadow-lg shadow-blue-400/50"></div>
 
             {/* Timeline Items */}
             <motion.div
-              className="flex items-center space-x-32 min-w-max px-16 pt-20"
+              className="flex items-center space-x-32 min-w-max px-32 pt-24 pb-16"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 1, ease: "easeOut" }}
@@ -198,7 +205,7 @@ const Timeline = () => {
                   }}
                 >
                   <div
-                    className={`${index % 2 === 0 ? "mb-40" : "mt-40"} w-80`}
+                    className={`${index % 2 === 0 ? "mb-48" : "mt-48"} w-80`}
                   >
                     <motion.div
                       className="cursor-pointer"
@@ -226,12 +233,15 @@ const Timeline = () => {
 
                       {/* Kaart */}
                       <motion.div
-                        className="relative backdrop-blur-xl bg-white/10 p-8 rounded-3xl border border-white/20 shadow-2xl overflow-hidden"
+                        className="relative backdrop-blur-xl bg-white/10 p-8 rounded-3xl border border-white/20 overflow-hidden mb-8"
+                        style={{
+                          filter: "drop-shadow(0 15px 35px rgba(0,0,0,0.3))",
+                        }}
                         animate={{
-                          boxShadow:
+                          filter:
                             selectedPeriod === period.id
-                              ? "0 25px 50px rgba(244, 63, 94, 0.25), 0 0 0 2px rgba(244, 63, 94, 0.5)"
-                              : "0 15px 35px rgba(0,0,0,0.2)",
+                              ? "drop-shadow(0 25px 50px rgba(244, 63, 94, 0.4))"
+                              : "drop-shadow(0 15px 35px rgba(0,0,0,0.3))",
                           backgroundColor:
                             selectedPeriod === period.id
                               ? "rgba(244, 63, 94, 0.1)"
@@ -294,6 +304,33 @@ const Timeline = () => {
           </motion.div>
         </div>
       </div>
+
+      {/* Firda Logo - Bottom Left Corner */}
+      <motion.div
+        className="fixed bottom-2 left-2 z-50"
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.8, delay: 1 }}
+        whileHover={{
+          scale: 1.1,
+          rotate: [0, -5, 5, -5, 0],
+          transition: { duration: 0.5 },
+        }}
+      >
+        <img
+          src="./images/firda-logo.gif"
+          alt="Firda Logo"
+          className="opacity-80 hover:opacity-100 transition-all duration-300 hover:drop-shadow-lg"
+          style={{ width: '26rem', height: 'auto' }}
+          key={Date.now()}
+          onLoad={e => {
+            // Restart GIF animation every 15 seconds
+            setInterval(() => {
+              e.target.src = e.target.src.split("?")[0] + "?" + Date.now()
+            }, 15000)
+          }}
+        />
+      </motion.div>
 
       {/* Timeline Modal */}
       <AnimatePresence>
