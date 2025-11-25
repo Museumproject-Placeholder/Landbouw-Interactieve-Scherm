@@ -336,6 +336,79 @@ export const api = {
       throw error
     }
   },
+
+  /**
+   * Get puzzle high scores
+   * Maps to: GET /api/puzzle_scores.php
+   */
+  getPuzzleScores: async (difficulty = null) => {
+    try {
+      const url = difficulty 
+        ? `/puzzle_scores.php?difficulty=${difficulty}`
+        : "/puzzle_scores.php"
+      const response = await apiClient.get(url)
+      return response.data
+    } catch (error) {
+      console.error("Failed to get puzzle scores:", error.message)
+      return { success: false, scores: [] }
+    }
+  },
+
+  /**
+   * Save puzzle score
+   * Maps to: POST /api/puzzle_scores.php
+   */
+  savePuzzleScore: async (playerName, moves, difficulty = 'easy') => {
+    try {
+      const response = await apiClient.post("/puzzle_scores.php", {
+        player_name: playerName,
+        moves: moves,
+        difficulty: difficulty
+      })
+      return response.data
+    } catch (error) {
+      console.error("Failed to save puzzle score:", error.message)
+      if (error.response?.data) {
+        return error.response.data
+      }
+      return { success: false, message: "Failed to save score" }
+    }
+  },
+
+  /**
+   * Get memory game high scores
+   * Maps to: GET /api/memory_scores.php
+   */
+  getMemoryScores: async () => {
+    try {
+      const response = await apiClient.get("/memory_scores.php")
+      return response.data
+    } catch (error) {
+      console.error("Failed to get memory scores:", error.message)
+      return { success: false, scores: [] }
+    }
+  },
+
+  /**
+   * Save memory game score
+   * Maps to: POST /api/memory_scores.php
+   */
+  saveMemoryScore: async (playerName, moves, timeSeconds) => {
+    try {
+      const response = await apiClient.post("/memory_scores.php", {
+        player_name: playerName,
+        moves: moves,
+        time_seconds: timeSeconds
+      })
+      return response.data
+    } catch (error) {
+      console.error("Failed to save memory score:", error.message)
+      if (error.response?.data) {
+        return error.response.data
+      }
+      return { success: false, message: "Failed to save score" }
+    }
+  },
 }
 
 export default api

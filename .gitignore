@@ -26,9 +26,6 @@ frontend/build/
 Thumbs.db
 desktop.ini
 
-# Claude Code
-.claude/
-
 # Temporary files
 *.tmp
 .cache/

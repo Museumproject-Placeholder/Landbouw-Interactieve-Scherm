@@ -78,12 +78,25 @@ try {
         $event['has_puzzle'] = ($hasPuzzle === true || $hasPuzzle === 1 || $hasPuzzle === '1' || $hasPuzzle === 'true');
         
         // Keep puzzle_image_url as string (or null if empty)
-        // Don't set to null if it's an empty string - keep it as empty string so frontend can check
-        if (empty($event['puzzle_image_url']) || $event['puzzle_image_url'] === null) {
+        $puzzleImageUrl = $event['puzzle_image_url'] ?? '';
+        if (empty($puzzleImageUrl) || $puzzleImageUrl === null) {
             $event['puzzle_image_url'] = null;
+            $hasPuzzleImage = false;
         } else {
-            // Ensure it's a string
-            $event['puzzle_image_url'] = (string)$event['puzzle_image_url'];
+            $event['puzzle_image_url'] = (string)$puzzleImageUrl;
+            $hasPuzzleImage = true;
+        }
+        
+        // Calculate game_type based on has_puzzle and puzzle_image_url
+        // If has_puzzle is true AND puzzle_image_url exists -> puzzle
+        // If has_puzzle is true AND no puzzle_image_url -> memory
+        // Otherwise -> none
+        if ($event['has_puzzle'] && $hasPuzzleImage) {
+            $event['game_type'] = 'puzzle';
+        } elseif ($event['has_puzzle']) {
+            $event['game_type'] = 'memory';
+        } else {
+            $event['game_type'] = 'none';
         }
 
         // Year might be a string like "1925" or range like "1930-1956"

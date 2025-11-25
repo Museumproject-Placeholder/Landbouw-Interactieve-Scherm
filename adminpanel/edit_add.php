@@ -1,9 +1,8 @@
 <?php
-// Enable error reporting for debugging (remove in production)
+// Enable error reporting for debugging
 error_reporting(E_ALL);
-ini_set('display_errors', 0); // Don't display errors to users, but log them
+ini_set('display_errors', 1); // Show errors for debugging
 ini_set('log_errors', 1);
-
 
 include 'includes/db.php';
 include 'includes/auth.php';
@@ -21,6 +20,7 @@ $event = [
     'stage' => '1',
     'puzzle' => 0,
     'puzzle_image' => '',
+    'game_type' => 'none',
     'detailed_modal' => 0,
     'context' => '',
     'volgorde' => '1',
@@ -31,16 +31,18 @@ $event = [
 
 // Get event sections (only when editing)
 $eventSections = [];
+$eventMedia = [];
+$eventKeyMoments = [];
+
 if ($isEdit) {
     $id = intval($_GET['id']);
     $result = mysqli_query($conn, "SELECT * FROM timeline_events WHERE id = $id");
     if ($result && mysqli_num_rows($result) > 0) {
         $event = mysqli_fetch_assoc($result);
         // Map database columns to form fields
-        // Extract first year from range if exists (for backwards compatibility)
         $yearValue = $event['year'];
         if (preg_match('/^(\d{4})/', $yearValue, $matches)) {
-            $yearValue = $matches[1]; // Take first 4-digit year
+            $yearValue = $matches[1];
         }
         $event['jaar'] = $yearValue;
         $event['titel'] = $event['title'];
@@ -53,6 +55,19 @@ if ($isEdit) {
         $event['actief'] = $event['is_active'];
         $event['category'] = $event['category'] ?? 'museum';
         $event['has_key_moments'] = $event['has_key_moments'] ?? 0;
+        
+        // Determine game_type from existing data (has_puzzle + puzzle_image)
+        // Always calculate based on actual data, don't trust stored game_type
+        $hasPuzzle = ($event['puzzle'] == 1 || $event['puzzle'] === true || $event['puzzle'] === '1');
+        $hasPuzzleImage = !empty($event['puzzle_image']) && $event['puzzle_image'] !== '';
+        
+        if ($hasPuzzle && $hasPuzzleImage) {
+            $event['game_type'] = 'puzzle';
+        } elseif ($hasPuzzle) {
+            $event['game_type'] = 'memory';
+        } else {
+            $event['game_type'] = 'none';
+        }
 
         // Get event sections
         $sectionsResult = mysqli_query($conn, "SELECT * FROM event_sections WHERE event_id = $id ORDER BY section_order ASC");
@@ -62,8 +77,7 @@ if ($isEdit) {
             }
         }
 
-        // Get event media (photos)
-        $eventMedia = [];
+        // Get event media
         $mediaResult = mysqli_query($conn, "SELECT * FROM event_media WHERE event_id = $id ORDER BY display_order ASC");
         if ($mediaResult) {
             while ($media = mysqli_fetch_assoc($mediaResult)) {
@@ -72,7 +86,6 @@ if ($isEdit) {
         }
 
         // Get event key moments
-        $eventKeyMoments = [];
         $keyMomentsResult = mysqli_query($conn, "SELECT * FROM event_key_moments WHERE event_id = $id ORDER BY display_order ASC, year ASC");
         if ($keyMomentsResult) {
             while ($moment = mysqli_fetch_assoc($keyMomentsResult)) {
@@ -82,47 +95,100 @@ if ($isEdit) {
     }
 }
 
+$error = '';
+$success = '';
+
 // Process form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $jaar = mysqli_real_escape_string($conn, $_POST['jaar']);
-    $titel = mysqli_real_escape_string($conn, $_POST['titel']);
-    $text = mysqli_real_escape_string($conn, $_POST['text']);
-    $icon = mysqli_real_escape_string($conn, $_POST['icon']);
-    $gradient = mysqli_real_escape_string($conn, $_POST['gradient']);
-    $museum_gradient = mysqli_real_escape_string($conn, $_POST['museum_gradient']);
-    $stage = intval($_POST['stage']);
-    // Handle puzzle checkbox - checkbox sends "1" when checked, nothing when unchecked
-    // Use hidden input to ensure "0" is sent when unchecked
-    $puzzle = (isset($_POST['puzzle']) && $_POST['puzzle'] == '1') ? 1 : 0;
+    $jaar = mysqli_real_escape_string($conn, trim($_POST['jaar'] ?? ''));
+    $titel = mysqli_real_escape_string($conn, trim($_POST['titel'] ?? ''));
+    $text = mysqli_real_escape_string($conn, trim($_POST['text'] ?? ''));
+    $icon = mysqli_real_escape_string($conn, $_POST['icon'] ?? '🌾');
+    $gradient = mysqli_real_escape_string($conn, $_POST['gradient'] ?? '');
+    $museum_gradient = mysqli_real_escape_string($conn, $_POST['museum_gradient'] ?? '');
+    $stage = intval($_POST['stage'] ?? 1);
     $detailed_modal = isset($_POST['detailed_modal']) ? 1 : 0;
-    $context = mysqli_real_escape_string($conn, $_POST['context']);
-    $volgorde = intval($_POST['volgorde']);
+    $context = mysqli_real_escape_string($conn, $_POST['context'] ?? '');
+    $volgorde = intval($_POST['volgorde'] ?? 1);
     $actief = isset($_POST['actief']) ? 1 : 0;
     $category = mysqli_real_escape_string($conn, $_POST['category'] ?? 'museum');
     $has_key_moments = isset($_POST['has_key_moments']) ? 1 : 0;
-
-    // Upload puzzle image
+    
+    // Handle game type selection
+    $game_type = $_POST['game_type'] ?? 'none';
+    $puzzle = ($game_type === 'puzzle' || $game_type === 'memory') ? 1 : 0;
+    
+    // Handle puzzle image upload
     $puzzle_image = $event['puzzle_image'] ?? '';
-    if (isset($_FILES['puzzle_image']) && $_FILES['puzzle_image']['error'] === 0) {
-        $uploadDir = 'uploads/';
-        if (!file_exists($uploadDir)) mkdir($uploadDir, 0777, true);
-        $fileName = time() . '_' . basename($_FILES['puzzle_image']['name']);
-        $targetPath = $uploadDir . $fileName;
-        if (move_uploaded_file($_FILES['puzzle_image']['tmp_name'], $targetPath)) {
-            $puzzle_image = $fileName;
+    
+    if ($game_type === 'puzzle') {
+        // Check if a new file is being uploaded
+        if (isset($_FILES['puzzle_image']) && $_FILES['puzzle_image']['error'] === UPLOAD_ERR_OK && $_FILES['puzzle_image']['size'] > 0) {
+            // Use absolute path for uploads directory
+            $uploadDir = __DIR__ . '/uploads/';
+            
+            // Create directory if it doesn't exist
+            if (!file_exists($uploadDir)) {
+                if (!@mkdir($uploadDir, 0755, true)) {
+                    $error = "Kan uploads map niet aanmaken. Controleer de serverrechten.";
+                }
+            }
+            
+            // Check if directory is writable
+            if (empty($error) && !is_writable($uploadDir)) {
+                $error = "Uploads map is niet schrijfbaar. Controleer de bestandsrechten (chmod 755 of 777).";
+            }
+            
+            if (empty($error)) {
+                $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+                $fileType = $_FILES['puzzle_image']['type'];
+                
+                if (!in_array($fileType, $allowedTypes)) {
+                    $error = "Alleen afbeeldingen zijn toegestaan (JPEG, PNG, GIF, WebP). Ontvangen type: " . htmlspecialchars($fileType);
+                } else {
+                    // Clean filename
+                    $originalName = basename($_FILES['puzzle_image']['name']);
+                    $cleanName = preg_replace('/[^a-zA-Z0-9._-]/', '', $originalName);
+                    if (empty($cleanName)) {
+                        $cleanName = 'image.jpg';
+                    }
+                    $fileName = time() . '_' . $cleanName;
+                    $targetPath = $uploadDir . $fileName;
+                    
+                    if (move_uploaded_file($_FILES['puzzle_image']['tmp_name'], $targetPath)) {
+                        $puzzle_image = $fileName;
+                    } else {
+                        $error = "Fout bij het uploaden. Upload map: " . $uploadDir . " | Bestand: " . $fileName;
+                    }
+                }
+            }
         }
+        // If no new file uploaded, keep existing puzzle_image (already set above)
+    } else {
+        // Clear puzzle image if not puzzle game
+        $puzzle_image = '';
     }
 
-    // Validate year format (must be 4 digits, between 1820-2025)
-    $jaar = trim($jaar);
-    if (!preg_match('/^\d{4}$/', $jaar) || intval($jaar) < 1820 || intval($jaar) > 2025) {
-        $error = "Jaar moet een 4-cijferig getal zijn tussen 1820 en 2025 (bijv. 1950)";
+    // Validate year
+    if (!preg_match('/^\d{1,4}$/', $jaar) || intval($jaar) < 0 || intval($jaar) > 9999) {
+        $error = "Jaar moet een getal zijn tussen 0 en 9999";
     }
 
     // Validate required fields
-    if (empty($error) && $jaar && $titel && $text && $volgorde) {
+    if (empty($error)) {
+        $missing = [];
+        if (empty($jaar)) $missing[] = "Jaar";
+        if (empty($titel)) $missing[] = "Titel";
+        if (empty($text)) $missing[] = "Beschrijving";
+        if (!isset($_POST['volgorde']) || $_POST['volgorde'] === '') $missing[] = "Volgorde";
+        
+        if (!empty($missing)) {
+            $error = "Vul alle verplichte velden in: " . implode(", ", $missing);
+        }
+    }
+
+    if (empty($error)) {
         if ($isEdit) {
-            // Update existing event (table: timeline_events)
             $query = "UPDATE timeline_events SET 
                 year='$jaar', title='$titel', description='$text',
                 icon='$icon', gradient='$gradient', museum_gradient='$museum_gradient',
@@ -132,825 +198,874 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 has_key_moments='$has_key_moments'
                 WHERE id=$id";
         } else {
-            // Add new event (table: timeline_events)
             $query = "INSERT INTO timeline_events (year, title, description, icon, gradient, museum_gradient, stage, has_puzzle, puzzle_image_url, use_detailed_modal, historical_context, sort_order, is_active, category, has_key_moments)
                 VALUES ('$jaar','$titel','$text','$icon','$gradient','$museum_gradient','$stage','$puzzle','$puzzle_image','$detailed_modal','$context','$volgorde','$actief','$category','$has_key_moments')";
         }
 
         if (mysqli_query($conn, $query)) {
-            // Get the event ID (new or existing)
             $eventId = $isEdit ? $id : mysqli_insert_id($conn);
 
-            // Process event sections (only if they are filled in)
+            // Process event sections
             if (isset($_POST['sections']) && is_array($_POST['sections'])) {
-                // First remove all existing sections for this event
                 mysqli_query($conn, "DELETE FROM event_sections WHERE event_id = $eventId");
-
-                // Add new sections
                 foreach ($_POST['sections'] as $index => $section) {
                     if (!empty($section['title']) && !empty($section['content'])) {
                         $sectionTitle = mysqli_real_escape_string($conn, $section['title']);
                         $sectionContent = mysqli_real_escape_string($conn, $section['content']);
                         $sectionOrder = intval($section['order']) ?: ($index + 1);
-
-                        $sectionQuery = "INSERT INTO event_sections (event_id, section_title, section_content, section_order) 
-                                        VALUES ($eventId, '$sectionTitle', '$sectionContent', $sectionOrder)";
-                        mysqli_query($conn, $sectionQuery);
+                        $hasBorder = isset($section['has_border']) ? 1 : 0;
+                        mysqli_query($conn, "INSERT INTO event_sections (event_id, section_title, section_content, section_order, has_border) 
+                                            VALUES ($eventId, '$sectionTitle', '$sectionContent', $sectionOrder, $hasBorder)");
                     }
                 }
             }
 
-            // Process event key moments (only if has_key_moments is enabled)
+            // Process key moments
             if ($has_key_moments && isset($_POST['key_moments']) && is_array($_POST['key_moments'])) {
-                // First remove all existing key moments for this event
                 mysqli_query($conn, "DELETE FROM event_key_moments WHERE event_id = $eventId");
-
-                // Add new key moments (max 5)
                 $momentCount = 0;
                 foreach ($_POST['key_moments'] as $index => $moment) {
-                    if ($momentCount >= 5) break; // Max 5 moments
-
+                    if ($momentCount >= 5) break;
                     if (!empty($moment['year']) && !empty($moment['title'])) {
                         $momentYear = intval($moment['year']);
                         $momentTitle = mysqli_real_escape_string($conn, $moment['title']);
-                        $momentShortDesc = mysqli_real_escape_string($conn, $moment['short_description'] ?? '');
-                        $momentFullDesc = mysqli_real_escape_string($conn, $moment['full_description'] ?? '');
-                        $momentOrder = intval($moment['order']) ?: ($index + 1);
-
-                        $momentQuery = "INSERT INTO event_key_moments (event_id, year, title, short_description, full_description, display_order) 
-                                       VALUES ($eventId, $momentYear, '$momentTitle', '$momentShortDesc', '$momentFullDesc', $momentOrder)";
-                        mysqli_query($conn, $momentQuery);
+                        $momentDesc = mysqli_real_escape_string($conn, $moment['description'] ?? '');
+                        $displayOrder = $momentCount + 1;
+                        mysqli_query($conn, "INSERT INTO event_key_moments (event_id, year, title, description, display_order) 
+                                            VALUES ($eventId, $momentYear, '$momentTitle', '$momentDesc', $displayOrder)");
                         $momentCount++;
                     }
                 }
-            } else {
-                // If has_key_moments is disabled, remove all key moments
-                mysqli_query($conn, "DELETE FROM event_key_moments WHERE event_id = $eventId");
             }
 
-            // Process event media uploads (max 5 photos)
-            $uploadDir = 'uploads/event_media/';
-            if (!file_exists($uploadDir)) {
-                mkdir($uploadDir, 0777, true);
-            }
-
-            // Remove media that are marked for deletion
-            if (isset($_POST['delete_media']) && is_array($_POST['delete_media'])) {
-                foreach ($_POST['delete_media'] as $mediaId) {
-                    $mediaId = intval($mediaId);
-                    $mediaQuery = mysqli_query($conn, "SELECT file_url FROM event_media WHERE id = $mediaId AND event_id = $eventId");
-                    if ($mediaRow = mysqli_fetch_assoc($mediaQuery)) {
-                        $filePath = $uploadDir . $mediaRow['file_url'];
-                        if (file_exists($filePath)) {
-                            unlink($filePath);
-                        }
-                    }
-                    mysqli_query($conn, "DELETE FROM event_media WHERE id = $mediaId AND event_id = $eventId");
-                }
-            }
-
-            // Update captions for existing media
-            if (isset($_POST['update_media_caption']) && is_array($_POST['update_media_caption'])) {
-                foreach ($_POST['update_media_caption'] as $mediaId => $caption) {
-                    $mediaId = intval($mediaId);
-                    $caption = mysqli_real_escape_string($conn, $caption);
-                    mysqli_query($conn, "UPDATE event_media SET caption = '$caption' WHERE id = $mediaId AND event_id = $eventId");
-                }
-            }
-
-            // Upload new media files
-            if (isset($_FILES['event_media']) && is_array($_FILES['event_media']['name'])) {
-                $remainingMediaQuery = mysqli_query($conn, "SELECT COUNT(*) as count FROM event_media WHERE event_id = $eventId");
-                $remainingMediaRow = mysqli_fetch_assoc($remainingMediaQuery);
-                $existingMediaCount = intval($remainingMediaRow['count']);
-                $maxMedia = 5;
-
-                $uploadErrors = [];
-                $uploadSuccess = [];
-
-                foreach ($_FILES['event_media']['name'] as $index => $fileName) {
-                    if ($existingMediaCount >= $maxMedia) {
-                        $uploadErrors[] = "Maximum aantal foto's (5) bereikt";
-                        break;
-                    }
-
-                    $fileError = $_FILES['event_media']['error'][$index];
-                    if ($fileError === 0) {
-                        $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-                        $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-
-                        if (in_array($fileExtension, $allowedExtensions)) {
-                            $newFileName = time() . '_' . $index . '_' . basename($fileName);
-                            $targetPath = $uploadDir . $newFileName;
-
-                            if (move_uploaded_file($_FILES['event_media']['tmp_name'][$index], $targetPath)) {
-                                $caption = isset($_POST['media_caption'][$index]) ? mysqli_real_escape_string($conn, $_POST['media_caption'][$index]) : '';
-                                $displayOrder = $existingMediaCount + 1;
-
-                                $newFileNameEscaped = mysqli_real_escape_string($conn, $newFileName);
-                                $captionEscaped = mysqli_real_escape_string($conn, $caption);
-
-                                // Check if media_type column is ENUM - if so, use 'photo' instead of 'image'
-                                $columnCheck = mysqli_query($conn, "SHOW COLUMNS FROM event_media WHERE Field = 'media_type'");
-                                $columnInfo = mysqli_fetch_assoc($columnCheck);
-                                $mediaTypeValue = 'image';
-
-                                if ($columnInfo && stripos($columnInfo['Type'], 'enum') !== false) {
-                                    if (stripos($columnInfo['Type'], 'photo') !== false) {
-                                        $mediaTypeValue = 'photo';
-                                    }
-                                }
-
-                                $mediaQuery = "INSERT INTO event_media (event_id, media_type, file_url, caption, display_order) 
-                                              VALUES ($eventId, '$mediaTypeValue', '$newFileNameEscaped', '$captionEscaped', $displayOrder)";
-
-                                if (mysqli_query($conn, $mediaQuery)) {
-                                    $uploadSuccess[] = $fileName;
-                                    $existingMediaCount++;
-                                } else {
-                                    $uploadErrors[] = "Database error voor $fileName: " . mysqli_error($conn);
-                                    if (file_exists($targetPath)) {
-                                        @unlink($targetPath);
-                                    }
-                                }
-                            } else {
-                                $uploadErrors[] = "Upload mislukt voor $fileName";
-                            }
-                        } else {
-                            $uploadErrors[] = "Bestandstype niet toegestaan voor $fileName";
-                        }
-                    } else {
-                        $uploadErrors[] = "Upload error voor $fileName (error code: $fileError)";
-                    }
-                }
-
-                if (!empty($uploadErrors)) {
-                    $error = ($error ?? '') . " " . implode("; ", $uploadErrors);
-                }
-            }
-
-            // Redirect with success message
-            if (!headers_sent()) {
-                header("Location: index.php");
-                exit;
-            }
+            header("Location: index.php?success=1");
+            exit;
         } else {
             $error = "Databasefout: " . mysqli_error($conn);
         }
-    } else {
-        $error = "Vul alle verplichte velden in.";
     }
 }
 ?>
 <!DOCTYPE html>
 <html lang="nl">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $isEdit ? 'Event Bewerken' : 'Nieuw Event Toevoegen' ?></title>
-    <link rel="stylesheet" href="style.css">
+    <title><?= $isEdit ? 'Bewerk' : 'Nieuw' ?> Event - Admin Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Extra layout for form cards */
-        .form-section {
-            background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
-            border-radius: 16px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-            padding: 28px;
-            flex: 1;
-            min-width: 300px;
-            border-left: 4px solid #440f0f;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-
-        .form-section:hover {
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e8e8e8;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 12px;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .back-btn:hover {
+            background: rgba(255,255,255,0.2);
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
         }
-
+        
+        .alert {
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-weight: 500;
+        }
+        
+        .alert-error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #fca5a5;
+        }
+        
+        .alert-success {
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid rgba(34, 197, 94, 0.4);
+            color: #86efac;
+        }
+        
         .form-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 24px;
-            margin-top: 30px;
         }
-
-        .form-section h3 {
-            margin-top: 0;
-            margin-bottom: 20px;
-            font-size: 20px;
+        
+        @media (max-width: 900px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+        }
+        
+        .card-full {
+            grid-column: 1 / -1;
+        }
+        
+        .card-title {
             display: flex;
             align-items: center;
             gap: 10px;
-            color: #440f0f;
+            font-size: 18px;
             font-weight: 600;
-            padding-bottom: 12px;
-            border-bottom: 2px solid #f0f2f5;
+            margin-bottom: 20px;
+            color: #fff;
         }
-
-        .form-section label {
+        
+        .card-title .icon {
+            font-size: 24px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        label {
             display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: #a0a0a0;
             margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
-            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-
-        .form-section label[for] {
-            margin-top: 16px;
-        }
-
+        
         input[type="text"],
         input[type="number"],
         textarea,
         select {
             width: 100%;
-            padding: 12px 16px;
-            margin-top: 5px;
-            border: 2px solid #e5e7eb;
+            padding: 14px 16px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.15);
             border-radius: 10px;
-            font-size: 14px;
-            transition: border-color 0.3s ease, box-shadow 0.3s ease;
-            background: white;
+            color: #fff;
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.3s;
         }
-
-        input[type="text"]:focus,
-        input[type="number"]:focus,
+        
+        input:focus,
         textarea:focus,
         select:focus {
             outline: none;
-            border-color: #440f0f;
-            box-shadow: 0 0 0 3px rgba(68, 15, 15, 0.1);
+            border-color: #00d9ff;
+            box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
         }
-
+        
         textarea {
+            min-height: 120px;
             resize: vertical;
-            min-height: 100px;
-            font-family: inherit;
         }
-
+        
+        select {
+            cursor: pointer;
+        }
+        
+        option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+        
+        /* Game Type Selection */
+        .game-type-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+        
+        .game-type-option {
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .game-type-option input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .game-type-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 20px 16px;
+            background: rgba(0,0,0,0.3);
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 12px;
+            transition: all 0.3s;
+        }
+        
+        .game-type-card:hover {
+            border-color: rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.05);
+        }
+        
+        .game-type-option input:checked + .game-type-card {
+            border-color: #00d9ff;
+            background: rgba(0, 217, 255, 0.1);
+        }
+        
+        .game-type-card .emoji {
+            font-size: 32px;
+        }
+        
+        .game-type-card .label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+        
+        .game-type-card .desc {
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+        }
+        
+        /* Puzzle Upload */
+        .puzzle-upload-area {
+            display: none;
+            margin-top: 20px;
+            padding: 24px;
+            background: rgba(0, 217, 255, 0.05);
+            border: 2px dashed rgba(0, 217, 255, 0.3);
+            border-radius: 12px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .puzzle-upload-area.active {
+            display: block;
+        }
+        
+        .puzzle-upload-area:hover {
+            border-color: #00d9ff;
+            background: rgba(0, 217, 255, 0.1);
+        }
+        
+        .upload-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #00d9ff, #00ff88);
+            border: none;
+            border-radius: 8px;
+            color: #000;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 217, 255, 0.3);
+        }
+        
+        .current-file {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 8px;
+            color: #86efac;
+            font-size: 13px;
+        }
+        
+        /* Memory Info */
+        .memory-info {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(34, 197, 94, 0.05);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 12px;
+        }
+        
+        .memory-info.active {
+            display: block;
+        }
+        
+        .memory-info p {
+            color: #86efac;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        /* Checkbox */
         .checkbox-group {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-top: 12px;
-            padding: 12px;
-            background: #f9fafb;
+            gap: 12px;
+            padding: 14px 16px;
+            background: rgba(0,0,0,0.2);
             border-radius: 10px;
-            border: 2px solid #e5e7eb;
+            cursor: pointer;
+            transition: all 0.3s;
         }
-
+        
+        .checkbox-group:hover {
+            background: rgba(0,0,0,0.3);
+        }
+        
         .checkbox-group input[type="checkbox"] {
             width: 20px;
             height: 20px;
+            accent-color: #00d9ff;
             cursor: pointer;
-            accent-color: #440f0f;
         }
-
-        .checkbox-group label {
-            margin: 0;
-            cursor: pointer;
-            font-weight: 500;
-        }
-
-        .form-actions {
-            margin-top: 40px;
-            padding-top: 30px;
-            border-top: 2px solid #f0f2f5;
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-        }
-
-        .btn-secondary {
-            background-color: #657575;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 10px;
-            font-weight: 500;
-        }
-
-        .btn-secondary:hover {
-            background-color: #546464;
-        }
-
-        .file-drop {
-            border: 2px dashed #c9a300;
-            border-radius: 12px;
-            padding: 30px;
-            text-align: center;
+        
+        .checkbox-group span {
             font-size: 14px;
-            color: #666;
-            background: #fffbf0;
-            transition: all 0.3s ease;
-            cursor: pointer;
+            color: #e8e8e8;
         }
-
-        .file-drop:hover {
-            border-color: #440f0f;
-            background: #fff8e7;
+        
+        /* Submit Button */
+        .submit-section {
+            margin-top: 32px;
+            display: flex;
+            gap: 16px;
+            justify-content: flex-end;
         }
-
-        .file-drop label {
+        
+        .btn {
+            padding: 16px 32px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
-            color: #440f0f;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #00d9ff, #00ff88);
+            color: #000;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 217, 255, 0.4);
+        }
+        
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        
+        /* Sections */
+        .section-item {
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .section-header h4 {
+            font-size: 14px;
+            color: #00d9ff;
+        }
+        
+        .remove-btn {
+            padding: 8px 16px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            border-radius: 8px;
+            color: #fca5a5;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .remove-btn:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+        
+        .add-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: rgba(0, 217, 255, 0.1);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 8px;
+            color: #00d9ff;
+            font-size: 14px;
             font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
         }
-
-        small {
-            display: block;
-            margin-top: 6px;
-            color: #666;
+        
+        .add-btn:hover {
+            background: rgba(0, 217, 255, 0.2);
+        }
+        
+        /* Small text */
+        .help-text {
             font-size: 12px;
-            font-style: italic;
+            color: #666;
+            margin-top: 6px;
+        }
+        
+        /* Row layout */
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        
+        @media (max-width: 600px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            .game-type-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
-
 <body>
-    <div class="dashboard-container">
+    <div class="container">
         <div class="header">
-            <h1><?= $isEdit ? '✏️ Event Bewerken' : '➕ Nieuw Event Toevoegen' ?></h1>
-            <a href="index.php" class="btn btn-secondary">
-                <i class="fa-solid fa-arrow-left"></i> Terug naar Dashboard
-            </a>
+            <h1><?= $isEdit ? '✏️ Bewerk Event' : '➕ Nieuw Event' ?></h1>
+            <a href="index.php" class="back-btn">← Terug naar overzicht</a>
         </div>
+        
         <?php if (!empty($error)): ?>
-            <div class="error"><?= htmlspecialchars($error) ?></div>
+            <div class="alert alert-error">⚠️ <?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
-
+        
+        <?php if (!empty($success)): ?>
+            <div class="alert alert-success">✅ <?= htmlspecialchars($success) ?></div>
+        <?php endif; ?>
+        
         <form method="POST" enctype="multipart/form-data">
             <div class="form-grid">
-                <!-- Basis Info -->
-                <div class="form-section">
-                    <h3>📘 Basis Info</h3>
-                    <label>Jaar*</label>
-                    <input type="number" name="jaar" value="<?= htmlspecialchars($event['jaar']) ?>" min="1820" max="2025" step="1" placeholder="np. 1950" required style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px;">
-                    <small style="color: #666; display: block; margin-top: 5px;">Voer een enkel jaar in (bijv. 1950), geen bereik</small>
-
-                    <label>Titel*</label>
-                    <input type="text" name="titel" value="<?= htmlspecialchars($event['titel']) ?>" required>
-
-                    <label>Beschrijving*</label>
-                    <textarea name="text" required><?= htmlspecialchars($event['text']) ?></textarea>
-                </div>
-
-                <!-- Categorie -->
-                <div class="form-section">
-                    <h3>📂 Categorie</h3>
-                    <label>Categorie*</label>
-                    <select name="category" required>
-                        <option value="museum" <?= ($event['category'] ?? 'museum') === 'museum' ? 'selected' : '' ?>>Museum</option>
-                        <option value="landbouw" <?= ($event['category'] ?? 'museum') === 'landbouw' ? 'selected' : '' ?>>Landbouw</option>
-                        <option value="maatschappelijk" <?= ($event['category'] ?? 'museum') === 'maatschappelijk' ? 'selected' : '' ?>>Maatschappelijk</option>
-                    </select>
-                    <small style="color: #666; display: block; margin-top: 5px;">Selecteer de categorie voor dit event</small>
-                </div>
-
-                <!-- Stage -->
-                <div class="form-section">
-                    <h3>📊 Stage</h3>
-                    <label>Stage</label>
-                    <select name="stage">
-                        <?php for ($i = 1; $i <= 3; $i++): ?>
-                            <option value="<?= $i ?>" <?= $event['stage'] == $i ? 'selected' : '' ?>><?= $i ?></option>
-                        <?php endfor; ?>
-                    </select>
-                </div>
-
-                <!-- Puzzle Game -->
-                <div class="form-section">
-                    <h3>🧩 Puzzle Game</h3>
-                    <div class="checkbox-group">
-                        <input type="hidden" name="puzzle" value="0">
-                        <input type="checkbox" name="puzzle" value="1" <?= ($event['puzzle'] == 1 || $event['puzzle'] === true || $event['puzzle'] === '1') ? 'checked' : '' ?>>
-                        <label>Heeft puzzel? (ON/OFF)</label>
+                
+                <!-- Basic Info Card -->
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📝</span>
+                        Basis Informatie
                     </div>
-                    <small style="color: #666; display: block; margin-top: 5px;">Wanneer aangevinkt, wordt de "Speel Puzzle" knop getoond in de detailed modal</small>
-
-                    <label>Puzzel afbeelding upload</label>
-                    <div class="file-drop">
-                        <input type="file" name="puzzle_image" style="display:none;" id="fileUpload">
-                        <label for="fileUpload" style="cursor:pointer;">Sleep bestand hierheen of klik om te uploaden</label>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Jaar *</label>
+                            <input type="number" name="jaar" value="<?= htmlspecialchars($event['jaar']) ?>" min="0" max="9999" required placeholder="bijv. 1950">
+                        </div>
+                        <div class="form-group">
+                            <label>Volgorde *</label>
+                            <input type="number" name="volgorde" value="<?= htmlspecialchars($event['volgorde']) ?>" min="0" required placeholder="1">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Titel *</label>
+                        <input type="text" name="titel" value="<?= htmlspecialchars($event['titel']) ?>" required placeholder="Event titel">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Beschrijving *</label>
+                        <textarea name="text" required placeholder="Beschrijving van het event..."><?= htmlspecialchars($event['text']) ?></textarea>
+                    </div>
+                </div>
+                
+                <!-- Category & Settings Card -->
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">⚙️</span>
+                        Categorie & Instellingen
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Categorie *</label>
+                        <select name="category" required>
+                            <option value="museum" <?= $event['category'] === 'museum' ? 'selected' : '' ?>>🏛️ Museum</option>
+                            <option value="landbouw" <?= $event['category'] === 'landbouw' ? 'selected' : '' ?>>🌾 Landbouw</option>
+                            <option value="maatschappelijk" <?= $event['category'] === 'maatschappelijk' ? 'selected' : '' ?>>👥 Maatschappelijk</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Icon (Emoji)</label>
+                            <input type="text" name="icon" value="<?= htmlspecialchars($event['icon']) ?>" placeholder="🌾">
+                        </div>
+                        <div class="form-group">
+                            <label>Stage</label>
+                            <select name="stage">
+                                <?php for ($i = 1; $i <= 3; $i++): ?>
+                                    <option value="<?= $i ?>" <?= $event['stage'] == $i ? 'selected' : '' ?>><?= $i ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" name="actief" <?= $event['actief'] ? 'checked' : '' ?>>
+                            <span>Actief (zichtbaar op de timeline)</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" name="detailed_modal" <?= $event['detailed_modal'] ? 'checked' : '' ?>>
+                            <span>Gebruik detailed modal</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" name="has_key_moments" id="hasKeyMoments" <?= $event['has_key_moments'] ? 'checked' : '' ?> onchange="toggleKeyMoments()">
+                            <span>Heeft belangrijke momenten</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Game Selection Card -->
+                <div class="card card-full">
+                    <div class="card-title">
+                        <span class="icon">🎮</span>
+                        Spel voor Kinderen
+                    </div>
+                    
+                    <label>Kies speltype</label>
+                    <div class="game-type-grid">
+                        <label class="game-type-option">
+                            <input type="radio" name="game_type" value="none" <?= $event['game_type'] === 'none' ? 'checked' : '' ?> onchange="toggleGameOptions()">
+                            <div class="game-type-card">
+                                <span class="emoji">❌</span>
+                                <span class="label">Geen spel</span>
+                                <span class="desc">Geen interactief spel</span>
+                            </div>
+                        </label>
+                        <label class="game-type-option">
+                            <input type="radio" name="game_type" value="puzzle" <?= $event['game_type'] === 'puzzle' ? 'checked' : '' ?> onchange="toggleGameOptions()">
+                            <div class="game-type-card">
+                                <span class="emoji">🧩</span>
+                                <span class="label">Puzzle Spel</span>
+                                <span class="desc">Schuifpuzzel met afbeelding</span>
+                            </div>
+                        </label>
+                        <label class="game-type-option">
+                            <input type="radio" name="game_type" value="memory" <?= $event['game_type'] === 'memory' ? 'checked' : '' ?> onchange="toggleGameOptions()">
+                            <div class="game-type-card">
+                                <span class="emoji">🧠</span>
+                                <span class="label">Memory Spel</span>
+                                <span class="desc">Vind de paren</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <!-- Puzzle Upload Area -->
+                    <div class="puzzle-upload-area" id="puzzleUploadSection">
+                        <input type="file" name="puzzle_image" id="puzzleFileUpload" accept="image/*" style="display:none" onchange="updateFileName(this)">
+                        <button type="button" class="upload-btn" onclick="document.getElementById('puzzleFileUpload').click()">
+                            📁 Selecteer Afbeelding
+                        </button>
+                        <p class="help-text" style="margin-top: 12px; color: #888;">
+                            Upload een afbeelding die in stukjes wordt verdeeld voor de puzzle<br>
+                            <small>Ondersteunde formaten: JPEG, PNG, GIF, WebP</small>
+                        </p>
+                        <div id="selectedFileName" style="margin-top: 12px; color: #00d9ff; font-weight: 500; display: none;"></div>
                         <?php if (!empty($event['puzzle_image'])): ?>
-                            <div style="margin-top:10px;">
-                                <small>Huidig bestand: <?= htmlspecialchars($event['puzzle_image']) ?></small>
+                            <div class="current-file">
+                                ✅ Huidig bestand: <strong><?= htmlspecialchars($event['puzzle_image']) ?></strong>
                             </div>
                         <?php endif; ?>
                     </div>
-                </div>
-
-                <!-- Geavanceerd -->
-                <div class="form-section">
-                    <h3>⚙️ Geavanceerd</h3>
-                    <div class="checkbox-group">
-                        <input type="checkbox" name="detailed_modal" <?= $event['detailed_modal'] ? 'checked' : '' ?>>
-                        <label>Gebruik detailed modal?</label>
-                    </div>
-
-                    <div class="checkbox-group" style="margin-top: 16px;">
-                        <input type="checkbox" name="has_key_moments" id="has_key_moments" <?= ($event['has_key_moments'] ?? 0) ? 'checked' : '' ?>>
-                        <label for="has_key_moments">Heeft Belangrijke momenten?</label>
-                    </div>
-                    <small style="color: #666; display: block; margin-top: 5px;">Toon mini timeline met belangrijke momenten in detailed modal (max 5 momenten)</small>
-
-                    <label>Historische context</label>
-                    <textarea name="context"><?= htmlspecialchars($event['context']) ?></textarea>
-
-                    <label>Volgorde*</label>
-                    <input type="number" name="volgorde" value="<?= htmlspecialchars($event['volgorde']) ?>" required>
-
-                    <div class="checkbox-group">
-                        <input type="checkbox" name="actief" <?= $event['actief'] ? 'checked' : '' ?>>
-                        <label>Actief?</label>
+                    
+                    <!-- Memory Info -->
+                    <div class="memory-info" id="memoryInfoSection">
+                        <p>🧠 Het Memory spel gebruikt standaard afbeeldingen met landbouw thema (dieren, tractoren, etc.).<br>
+                        <small style="color: #666;">Geen afbeelding upload nodig voor dit speltype.</small></p>
                     </div>
                 </div>
+                
+                <!-- Historical Context -->
+                <div class="card card-full">
+                    <div class="card-title">
+                        <span class="icon">📜</span>
+                        Historische Context
+                    </div>
+                    <div class="form-group">
+                        <label>Achtergrond informatie</label>
+                        <textarea name="context" placeholder="Optionele historische context..."><?= htmlspecialchars($event['context']) ?></textarea>
+                    </div>
+                </div>
+                
+                <!-- Key Moments -->
+                <div class="card card-full" id="keyMomentsSection" style="<?= $event['has_key_moments'] ? '' : 'display:none' ?>">
+                    <div class="card-title">
+                        <span class="icon">⏰</span>
+                        Belangrijke Momenten (max 5)
+                    </div>
+                    
+                    <div id="keyMomentsList">
+                        <?php 
+                        $moments = !empty($eventKeyMoments) ? $eventKeyMoments : [['year' => '', 'title' => '', 'description' => '']];
+                        foreach ($moments as $index => $moment): 
+                        ?>
+                        <div class="section-item" data-moment-index="<?= $index ?>">
+                            <div class="section-header">
+                                <h4>Moment <?= $index + 1 ?></h4>
+                                <?php if ($index > 0): ?>
+                                <button type="button" class="remove-btn" onclick="removeMoment(this)">Verwijderen</button>
+                                <?php endif; ?>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Jaar</label>
+                                    <input type="number" name="key_moments[<?= $index ?>][year]" value="<?= htmlspecialchars($moment['year']) ?>" min="1000" max="9999" placeholder="bijv. 1955">
+                                </div>
+                                <div class="form-group">
+                                    <label>Titel</label>
+                                    <input type="text" name="key_moments[<?= $index ?>][title]" value="<?= htmlspecialchars($moment['title']) ?>" placeholder="Titel van het moment">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Beschrijving (optioneel)</label>
+                                <input type="text" name="key_moments[<?= $index ?>][description]" value="<?= htmlspecialchars($moment['description'] ?? '') ?>" placeholder="Korte beschrijving">
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    
+                    <button type="button" class="add-btn" onclick="addMoment()">+ Moment toevoegen</button>
+                </div>
+                
+                <!-- Sections -->
+                <div class="card card-full">
+                    <div class="card-title">
+                        <span class="icon">📑</span>
+                        Extra Secties
+                    </div>
+                    
+                    <div id="sectionsList">
+                        <?php 
+                        if (!empty($eventSections)):
+                            foreach ($eventSections as $index => $section): 
+                        ?>
+                        <div class="section-item" data-section-index="<?= $index ?>">
+                            <div class="section-header">
+                                <h4>Sectie <?= $index + 1 ?></h4>
+                                <button type="button" class="remove-btn" onclick="removeSection(this)">Verwijderen</button>
+                            </div>
+                            <div class="form-group">
+                                <label>Titel</label>
+                                <input type="text" name="sections[<?= $index ?>][title]" value="<?= htmlspecialchars($section['section_title']) ?>" placeholder="Sectie titel">
+                            </div>
+                            <div class="form-group">
+                                <label>Inhoud</label>
+                                <textarea name="sections[<?= $index ?>][content]" placeholder="Sectie inhoud..."><?= htmlspecialchars($section['section_content']) ?></textarea>
+                            </div>
+                            <input type="hidden" name="sections[<?= $index ?>][order]" value="<?= $index + 1 ?>">
+                            <label class="checkbox-group" style="margin-top: 12px;">
+                                <input type="checkbox" name="sections[<?= $index ?>][has_border]" <?= ($section['has_border'] ?? 0) ? 'checked' : '' ?>>
+                                <span>Met rand</span>
+                            </label>
+                        </div>
+                        <?php 
+                            endforeach;
+                        endif; 
+                        ?>
+                    </div>
+                    
+                    <button type="button" class="add-btn" onclick="addSection()">+ Sectie toevoegen</button>
+                </div>
+                
             </div>
-
-            <!-- Event Key Moments (alleen bij edit) -->
-            <?php if ($isEdit && $id): ?>
-                <div class="form-section" style="margin-top: 30px;">
-                    <h3>⏱ Belangrijke Momenten (Mini Timeline)</h3>
-                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
-                        Beheer de belangrijke momenten die worden weergegeven in de mini timeline in de detailed modal. Maximaal 5 momenten.
-                    </p>
-                    <div id="key-moments-container">
-                        <?php if (!empty($eventKeyMoments)): ?>
-                            <?php foreach ($eventKeyMoments as $index => $moment): ?>
-                                <div class="moment-item" data-moment-index="<?= $index ?>" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;">
-                                    <div style="display: grid; grid-template-columns: 120px 1fr 100px auto; gap: 10px; margin-bottom: 15px; align-items: end;">
-                                        <div>
-                                            <label>Jaar*</label>
-                                            <input type="number" name="key_moments[<?= $index ?>][year]" value="<?= htmlspecialchars($moment['year']) ?>" min="1000" max="9999" required style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;">
-                                        </div>
-                                        <div>
-                                            <label>Titel*</label>
-                                            <input type="text" name="key_moments[<?= $index ?>][title]" value="<?= htmlspecialchars($moment['title']) ?>" placeholder="Bijv. Opening Museum" required style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;">
-                                        </div>
-                                        <div>
-                                            <label>Volgorde</label>
-                                            <input type="number" name="key_moments[<?= $index ?>][order]" value="<?= htmlspecialchars($moment['display_order']) ?>" min="1" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;">
-                                        </div>
-                                        <div style="display: flex; align-items: flex-end;">
-                                            <button type="button" class="btn-remove-moment" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer;">Verwijderen</button>
-                                        </div>
-                                    </div>
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                                        <div>
-                                            <label>Korte beschrijving</label>
-                                            <input type="text" name="key_moments[<?= $index ?>][short_description]" value="<?= htmlspecialchars($moment['short_description'] ?? '') ?>" placeholder="Korte tekst voor timeline" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;">
-                                        </div>
-                                        <div>
-                                            <label>Volledige beschrijving</label>
-                                            <textarea name="key_moments[<?= $index ?>][full_description]" rows="2" placeholder="Volledige tekst voor tooltip..." style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; resize: vertical;"><?= htmlspecialchars($moment['full_description'] ?? '') ?></textarea>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <p style="color: #999; font-style: italic; padding: 20px; text-align: center; background: #f5f5f5; border-radius: 8px;">
-                                Geen momenten toegevoegd. Klik op "+ Moment Toevoegen" om een moment toe te voegen.
-                            </p>
-                        <?php endif; ?>
-                    </div>
-                    <button type="button" id="add-moment-btn" style="margin-top: 15px; background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">+ Moment Toevoegen</button>
-                    <small style="color: #666; display: block; margin-top: 5px;">Maximum 5 momenten per event</small>
-                </div>
-            <?php endif; ?>
-
-            <!-- Event Media (alleen bij edit) -->
-            <?php if ($isEdit && $id): ?>
-                <div class="form-section" style="margin-top: 30px;">
-                    <h3>📸 Event Media (Foto's)</h3>
-                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
-                        Upload maximaal 5 foto's voor dit event. Deze worden weergegeven in de timeline modal.
-                    </p>
-
-                    <!-- Bestaande media -->
-                    <?php if (!empty($eventMedia)): ?>
-                        <div id="existing-media-container" style="margin-bottom: 20px;">
-                            <?php foreach ($eventMedia as $media): ?>
-                                <div class="media-item" data-media-id="<?= $media['id'] ?>" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #ddd; display: flex; align-items: center; gap: 15px;">
-                                    <div style="flex: 0 0 100px; height: 100px; overflow: hidden; border-radius: 6px;">
-                                        <img src="uploads/event_media/<?= htmlspecialchars($media['file_url']) ?>" alt="Media" style="width: 100%; height: 100%; object-fit: cover;">
-                                    </div>
-                                    <div style="flex: 1;">
-                                        <input type="text" name="update_media_caption[<?= $media['id'] ?>]" value="<?= htmlspecialchars($media['caption']) ?>" placeholder="Caption (optioneel)" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 5px;">
-                                        <small style="color: #666;"><?= htmlspecialchars($media['file_url']) ?></small>
-                                    </div>
-                                    <div>
-                                        <button type="button" class="btn-remove-media" data-media-id="<?= $media['id'] ?>" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer;">Verwijderen</button>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-
-                    <!-- Nieuwe media upload -->
-                    <?php
-                    $currentMediaCount = isset($eventMedia) ? count($eventMedia) : 0;
-                    $remainingSlots = 5 - $currentMediaCount;
-                    ?>
-                    <?php if ($remainingSlots > 0): ?>
-                        <div id="new-media-container">
-                            <label>Nieuwe foto's uploaden (<?= $remainingSlots ?> slots beschikbaar)</label>
-                            <input type="file" name="event_media[]" id="event_media_upload" multiple accept="image/*" style="margin-top: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; width: 100%;">
-                            <small style="color: #666; display: block; margin-top: 5px;">Selecteer maximaal <?= $remainingSlots ?> foto('s)</small>
-
-                            <!-- Preview container -->
-                            <div id="media-preview-container" style="margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;"></div>
-                        </div>
-                    <?php else: ?>
-                        <p style="color: #dc3545; padding: 15px; background: #ffe6e6; border-radius: 6px;">
-                            Maximum aantal foto's (5) bereikt. Verwijder eerst een foto om nieuwe toe te voegen.
-                        </p>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-
-            <!-- Event Sections (alleen bij edit) -->
-            <?php if ($isEdit && $id): ?>
-                <div class="form-section" style="margin-top: 30px;">
-                    <h3>📄 Event Sections</h3>
-                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
-                        Beheer de secties die worden weergegeven in de detailed modal voor dit event.
-                    </p>
-                    <div id="sections-container">
-                        <?php if (!empty($eventSections)): ?>
-                            <?php foreach ($eventSections as $index => $section): ?>
-                                <div class="section-item" data-section-index="<?= $index ?>" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;">
-                                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                                        <div style="flex: 1;">
-                                            <label>Section Titel</label>
-                                            <input type="text" name="sections[<?= $index ?>][title]" value="<?= htmlspecialchars($section['section_title']) ?>" placeholder="Bijv. Historische Context" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;">
-                                        </div>
-                                        <div style="flex: 0 0 120px;">
-                                            <label>Volgorde</label>
-                                            <input type="number" name="sections[<?= $index ?>][order]" value="<?= htmlspecialchars($section['section_order']) ?>" min="1" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;">
-                                        </div>
-                                        <div style="display: flex; align-items: flex-end;">
-                                            <button type="button" class="btn-remove-section" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer;">Verwijderen</button>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label>Section Content</label>
-                                        <textarea name="sections[<?= $index ?>][content]" rows="4" placeholder="Inhoud van de sectie..." style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; resize: vertical;"><?= htmlspecialchars($section['section_content']) ?></textarea>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <p style="color: #999; font-style: italic; padding: 20px; text-align: center; background: #f5f5f5; border-radius: 8px;">
-                                Geen sections toegevoegd. Klik op "+ Section Toevoegen" om een section toe te voegen.
-                            </p>
-                        <?php endif; ?>
-                    </div>
-                    <button type="button" id="add-section-btn" style="margin-top: 15px; background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">+ Section Toevoegen</button>
-                </div>
-            <?php endif; ?>
-
-            <div class="form-actions">
+            
+            <!-- Submit -->
+            <div class="submit-section">
                 <a href="index.php" class="btn btn-secondary">Annuleren</a>
-                <button type="submit" class="btn btn-primary">Opslaan</button>
+                <button type="submit" class="btn btn-primary">
+                    <?= $isEdit ? '💾 Wijzigingen Opslaan' : '➕ Event Toevoegen' ?>
+                </button>
             </div>
         </form>
     </div>
-
+    
     <script>
-        // Media management
-        const maxMedia = 5;
-        let currentMediaCount = <?= isset($eventMedia) ? count($eventMedia) : 0 ?>;
-
-        // Remove media handler
-        document.querySelectorAll('.btn-remove-media').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const mediaId = this.getAttribute('data-media-id');
-                const mediaItem = this.closest('.media-item');
-
-                if (confirm('Weet je zeker dat je deze foto wilt verwijderen?')) {
-                    // Create hidden input for deletion
-                    const deleteInput = document.createElement('input');
-                    deleteInput.type = 'hidden';
-                    deleteInput.name = 'delete_media[]';
-                    deleteInput.value = mediaId;
-                    document.querySelector('form').appendChild(deleteInput);
-
-                    // Remove from UI
-                    mediaItem.remove();
-                    currentMediaCount--;
-
-                    // Update remaining slots
-                    updateMediaSlots();
-                }
-            });
-        });
-
-        // Media upload preview
-        const mediaUpload = document.getElementById('event_media_upload');
-        const previewContainer = document.getElementById('media-preview-container');
-
-        if (mediaUpload) {
-            mediaUpload.addEventListener('change', function(e) {
-                const files = Array.from(e.target.files);
-                const remainingSlots = maxMedia - currentMediaCount;
-
-                if (files.length > remainingSlots) {
-                    alert(`Je kunt maximaal ${remainingSlots} foto('s) uploaden.`);
-                    this.value = '';
-                    previewContainer.innerHTML = '';
-                    return;
-                }
-
-                previewContainer.innerHTML = '';
-                files.forEach((file, index) => {
-                    if (file.type.startsWith('image/')) {
-                        const reader = new FileReader();
-                        reader.onload = function(e) {
-                            const previewDiv = document.createElement('div');
-                            previewDiv.style.cssText = 'position: relative; border-radius: 6px; overflow: hidden;';
-                            previewDiv.innerHTML = `
-                                <img src="${e.target.result}" style="width: 100%; height: 150px; object-fit: cover; display: block;">
-                                <input type="text" name="media_caption[]" placeholder="Caption (optioneel)" style="width: 100%; padding: 5px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
-                            `;
-                            previewContainer.appendChild(previewDiv);
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                });
-            });
-        }
-
-        function updateMediaSlots() {
-            const remainingSlots = maxMedia - currentMediaCount;
-            const newMediaContainer = document.getElementById('new-media-container');
-            if (newMediaContainer) {
-                const label = newMediaContainer.querySelector('label');
-                const small = newMediaContainer.querySelector('small');
-                if (label) label.textContent = `Nieuwe foto's uploaden (${remainingSlots} slots beschikbaar)`;
-                if (small) small.textContent = `Selecteer maximaal ${remainingSlots} foto('s)`;
-
-                if (remainingSlots <= 0) {
-                    newMediaContainer.style.display = 'none';
-                } else {
-                    newMediaContainer.style.display = 'block';
-                }
+        let sectionIndex = <?= !empty($eventSections) ? count($eventSections) : 0 ?>;
+        let momentIndex = <?= !empty($eventKeyMoments) ? count($eventKeyMoments) : 1 ?>;
+        
+        function toggleGameOptions() {
+            const gameType = document.querySelector('input[name="game_type"]:checked')?.value || 'none';
+            const puzzleSection = document.getElementById('puzzleUploadSection');
+            const memorySection = document.getElementById('memoryInfoSection');
+            
+            puzzleSection.classList.remove('active');
+            memorySection.classList.remove('active');
+            
+            if (gameType === 'puzzle') {
+                puzzleSection.classList.add('active');
+            } else if (gameType === 'memory') {
+                memorySection.classList.add('active');
             }
         }
-
-        // Dynamic section management
-        let sectionIndex = <?= count($eventSections) ?>;
-
-        document.getElementById('add-section-btn')?.addEventListener('click', function() {
-            const container = document.getElementById('sections-container');
-            // Remove empty message if present
-            const emptyMsg = container.querySelector('p[style*="color: #999"]');
-            if (emptyMsg) emptyMsg.remove();
-
-            const newSection = document.createElement('div');
-            newSection.className = 'section-item';
-            newSection.setAttribute('data-section-index', sectionIndex);
-
-            newSection.style.cssText = 'background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;';
-            newSection.innerHTML = `
-                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                    <div style="flex: 1;">
-                        <label>Section Titel</label>
-                        <input type="text" name="sections[${sectionIndex}][title]" placeholder="Bijv. Historische Context" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;">
+        
+        function updateFileName(input) {
+            const fileNameDiv = document.getElementById('selectedFileName');
+            if (input.files && input.files[0]) {
+                fileNameDiv.textContent = '📎 Geselecteerd: ' + input.files[0].name;
+                fileNameDiv.style.display = 'block';
+            } else {
+                fileNameDiv.style.display = 'none';
+            }
+        }
+        
+        function toggleKeyMoments() {
+            const section = document.getElementById('keyMomentsSection');
+            const checkbox = document.getElementById('hasKeyMoments');
+            section.style.display = checkbox.checked ? 'block' : 'none';
+        }
+        
+        function addSection() {
+            const list = document.getElementById('sectionsList');
+            const html = `
+                <div class="section-item" data-section-index="${sectionIndex}">
+                    <div class="section-header">
+                        <h4>Sectie ${sectionIndex + 1}</h4>
+                        <button type="button" class="remove-btn" onclick="removeSection(this)">Verwijderen</button>
                     </div>
-                    <div style="flex: 0 0 120px;">
-                        <label>Volgorde</label>
-                        <input type="number" name="sections[${sectionIndex}][order]" value="${sectionIndex + 1}" min="1" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;">
+                    <div class="form-group">
+                        <label>Titel</label>
+                        <input type="text" name="sections[${sectionIndex}][title]" placeholder="Sectie titel">
                     </div>
-                    <div style="display: flex; align-items: flex-end;">
-                        <button type="button" class="btn-remove-section" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer;">Verwijderen</button>
+                    <div class="form-group">
+                        <label>Inhoud</label>
+                        <textarea name="sections[${sectionIndex}][content]" placeholder="Sectie inhoud..."></textarea>
                     </div>
-                </div>
-                <div>
-                    <label>Section Content</label>
-                    <textarea name="sections[${sectionIndex}][content]" rows="4" placeholder="Inhoud van de sectie..." style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; resize: vertical;"></textarea>
+                    <input type="hidden" name="sections[${sectionIndex}][order]" value="${sectionIndex + 1}">
+                    <label class="checkbox-group" style="margin-top: 12px;">
+                        <input type="checkbox" name="sections[${sectionIndex}][has_border]">
+                        <span>Met rand</span>
+                    </label>
                 </div>
             `;
-
-            container.appendChild(newSection);
+            list.insertAdjacentHTML('beforeend', html);
             sectionIndex++;
-
-            // Attach remove event to new button
-            newSection.querySelector('.btn-remove-section').addEventListener('click', function() {
-                newSection.remove();
-
-                // If no sections left, show empty message
-                const container = document.getElementById('sections-container');
-                if (container.children.length === 0) {
-                    container.innerHTML = '<p style="color: #999; font-style: italic; padding: 20px; text-align: center; background: #f5f5f5; border-radius: 8px;">Geen sections toegevoegd. Klik op "+ Section Toevoegen" om een section toe te voegen.</p>';
-                }
-            });
-        });
-
-        // Attach remove events to existing buttons
-        document.querySelectorAll('.btn-remove-section').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const item = this.closest('.section-item');
-                item.remove();
-
-                // If no sections left, show empty message
-                const container = document.getElementById('sections-container');
-                if (container.children.length === 0) {
-                    container.innerHTML = '<p style="color: #999; font-style: italic; padding: 20px; text-align: center; background: #f5f5f5; border-radius: 8px;">Geen sections toegevoegd. Klik op "+ Section Toevoegen" om een section toe te voegen.</p>';
-                }
-            });
-        });
-
-        // Key Moments Management
-        const hasKeyMomentsCheckbox = document.getElementById('has_key_moments');
-        const keyMomentsContainer = document.getElementById('key-moments-container');
-        let momentIndex = <?= isset($eventKeyMoments) ? count($eventKeyMoments) : 0 ?>;
-
-        // Show/hide key moments section based on checkbox
-        if (hasKeyMomentsCheckbox) {
-            hasKeyMomentsCheckbox.addEventListener('change', function() {
-                const keyMomentsSection = document.querySelector('.form-section h3')?.parentElement;
-                // This will be handled by page reload after save, but we can add visual feedback
-            });
         }
-
-        // Add moment button
-        document.getElementById('add-moment-btn')?.addEventListener('click', function() {
-            const container = document.getElementById('key-moments-container');
-
-            // Check max 5 moments
-            const currentMoments = container.querySelectorAll('.moment-item').length;
-            if (currentMoments >= 5) {
-                alert('Maximum 5 momenten per event toegestaan.');
+        
+        function removeSection(btn) {
+            btn.closest('.section-item').remove();
+        }
+        
+        function addMoment() {
+            if (momentIndex >= 5) {
+                alert('Maximaal 5 momenten toegestaan');
                 return;
             }
-
-            // Remove empty message if present
-            const emptyMsg = container.querySelector('p[style*="color: #999"]');
-            if (emptyMsg) emptyMsg.remove();
-
-            const newMoment = document.createElement('div');
-            newMoment.className = 'moment-item';
-            newMoment.setAttribute('data-moment-index', momentIndex);
-
-            newMoment.style.cssText = 'background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;';
-            newMoment.innerHTML = `
-                <div style="display: grid; grid-template-columns: 120px 1fr 100px auto; gap: 10px; margin-bottom: 15px; align-items: end;">
-                    <div>
-                        <label>Jaar*</label>
-                        <input type="number" name="key_moments[${momentIndex}][year]" min="1000" max="9999" required style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;">
+            const list = document.getElementById('keyMomentsList');
+            const html = `
+                <div class="section-item" data-moment-index="${momentIndex}">
+                    <div class="section-header">
+                        <h4>Moment ${momentIndex + 1}</h4>
+                        <button type="button" class="remove-btn" onclick="removeMoment(this)">Verwijderen</button>
                     </div>
-                    <div>
-                        <label>Titel*</label>
-                        <input type="text" name="key_moments[${momentIndex}][title]" placeholder="Bijv. Opening Museum" required style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Jaar</label>
+                            <input type="number" name="key_moments[${momentIndex}][year]" min="1000" max="9999" placeholder="bijv. 1955">
+                        </div>
+                        <div class="form-group">
+                            <label>Titel</label>
+                            <input type="text" name="key_moments[${momentIndex}][title]" placeholder="Titel van het moment">
+                        </div>
                     </div>
-                    <div>
-                        <label>Volgorde</label>
-                        <input type="number" name="key_moments[${momentIndex}][order]" value="${momentIndex + 1}" min="1" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;">
-                    </div>
-                    <div style="display: flex; align-items: flex-end;">
-                        <button type="button" class="btn-remove-moment" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer;">Verwijderen</button>
-                    </div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div>
-                        <label>Korte beschrijving</label>
-                        <input type="text" name="key_moments[${momentIndex}][short_description]" placeholder="Korte tekst voor timeline" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;">
-                    </div>
-                    <div>
-                        <label>Volledige beschrijving</label>
-                        <textarea name="key_moments[${momentIndex}][full_description]" rows="2" placeholder="Volledige tekst voor tooltip..." style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; resize: vertical;"></textarea>
+                    <div class="form-group">
+                        <label>Beschrijving (optioneel)</label>
+                        <input type="text" name="key_moments[${momentIndex}][description]" placeholder="Korte beschrijving">
                     </div>
                 </div>
             `;
-
-            container.appendChild(newMoment);
+            list.insertAdjacentHTML('beforeend', html);
             momentIndex++;
-
-            // Attach remove event to new button
-            newMoment.querySelector('.btn-remove-moment').addEventListener('click', function() {
-                newMoment.remove();
-
-                // If no moments left, show empty message
-                const container = document.getElementById('key-moments-container');
-                if (container.children.length === 0) {
-                    container.innerHTML = '<p style="color: #999; font-style: italic; padding: 20px; text-align: center; background: #f5f5f5; border-radius: 8px;">Geen momenten toegevoegd. Klik op "+ Moment Toevoegen" om een moment toe te voegen.</p>';
-                }
-            });
-        });
-
-        // Attach remove events to existing moment buttons
-        document.querySelectorAll('.btn-remove-moment').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const item = this.closest('.moment-item');
-                item.remove();
-
-                // If no moments left, show empty message
-                const container = document.getElementById('key-moments-container');
-                if (container.children.length === 0) {
-                    container.innerHTML = '<p style="color: #999; font-style: italic; padding: 20px; text-align: center; background: #f5f5f5; border-radius: 8px;">Geen momenten toegevoegd. Klik op "+ Moment Toevoegen" om een moment toe te voegen.</p>';
-                }
-            });
+        }
+        
+        function removeMoment(btn) {
+            btn.closest('.section-item').remove();
+            momentIndex--;
+        }
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleGameOptions();
+            toggleKeyMoments();
         });
     </script>
 </body>
-
 </html>

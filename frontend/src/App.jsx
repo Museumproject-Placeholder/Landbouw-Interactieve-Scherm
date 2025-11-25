@@ -4,6 +4,7 @@ import HomePage from "./pages/HomePage"
 import DetailPage from "./pages/DetailPage"
 import AdminPage from "./pages/AdminPage"
 import PuzzleGamePage from "./pages/PuzzleGamePage"
+import MemoryGamePage from "./pages/MemoryGamePage"
 import "./styles/index.css"
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
             <Route path="/detail/:id" element={<DetailPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/puzzle-game" element={<PuzzleGamePage />} />
+            <Route path="/memory-game" element={<MemoryGamePage />} />
           </Routes>
         </main>
       </div>

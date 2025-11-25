@@ -8,6 +8,7 @@ import {
   Video,
   MapPin,
   Clock,
+  Brain,
 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { getTheme } from "../../../config/themes"
@@ -17,6 +18,7 @@ import {
   hasVideo,
 } from "../../../config/timelineGalleries"
 import ImagePuzzleModal from "../../PuzzleGame/ImagePuzzleModal"
+import MemoryGame from "../../PuzzleGame/MemoryGame"
 import LeeuwardenMap from "../content/LeeuwardenMap"
 import MiniTimeline from "../ui/MiniTimeline"
 import Breadcrumb from "../ui/Breadcrumb"
@@ -26,9 +28,9 @@ import { api } from "../../../services/api"
 const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
   const playSound = useSound()
   const [activeMedia, setActiveMedia] = useState("image") // 'image', 'gallery', 'video'
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false)
   const [selectedGalleryImage, setSelectedGalleryImage] = useState(null)
   const [isImagePuzzleModalOpen, setIsImagePuzzleModalOpen] = useState(false)
+  const [isMemoryGameModalOpen, setIsMemoryGameModalOpen] = useState(false)
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0)
   const [eventMedia, setEventMedia] = useState([])
   const [isLoadingMedia, setIsLoadingMedia] = useState(false)
@@ -178,13 +180,9 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
             if (data.success && data.url) {
               console.log("✅ Puzzle image URL received:", data.url)
               
-              // Use proxy to handle CORS
-              const apiUrl = import.meta.env.VITE_API_URL || "http://localhost/backend/api"
-              const baseUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl
-              const proxyUrl = `${baseUrl}/proxy_image.php?url=${encodeURIComponent(data.url)}`
-              
-              console.log("🔄 Using proxy URL:", proxyUrl)
-              setPuzzleImageUrl(proxyUrl)
+              // Use direct URL (no proxy needed for same-domain images)
+              // Proxy is only needed for cross-origin images (CORS)
+              setPuzzleImageUrl(data.url)
             } else {
               console.error("❌ Puzzle image API returned error:", data.message)
               setPuzzleImageUrl(null)
@@ -280,7 +278,6 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
   useEffect(() => {
     if (!isOpen) {
       setActiveMedia("image")
-      setIsAudioPlaying(false)
       setSelectedGalleryImage(null)
       setCurrentSlideIndex(0)
     }
@@ -288,20 +285,24 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
 
   if (!isOpen || !eventData) return null
 
-  const handleAudioGuide = () => {
-    playSound()
-    setIsAudioPlaying(!isAudioPlaying)
-    console.log("Audio guide toggled:", !isAudioPlaying)
-  }
-
   const handlePuzzleGame = () => {
     playSound()
     setIsImagePuzzleModalOpen(true)
   }
 
+  const handleMemoryGame = () => {
+    playSound()
+    setIsMemoryGameModalOpen(true)
+  }
+
   // Memoize close handler to prevent ImagePuzzleModal re-renders
   const handleCloseImagePuzzleModal = React.useCallback(() => {
     setIsImagePuzzleModalOpen(false)
+  }, [])
+
+  // Memoize close handler for MemoryGame
+  const handleCloseMemoryGameModal = React.useCallback(() => {
+    setIsMemoryGameModalOpen(false)
   }, [])
 
   const handleSlideChange = direction => {
@@ -488,6 +489,43 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
               {/* Breadcrumb Navigation */}
               <Breadcrumb items={breadcrumbItems} />
               
+              {/* Media Toggle Buttons - Moved to top for visibility */}
+              <div className="mt-4 mb-6 flex justify-end gap-3">
+                <motion.button 
+                  className={`px-5 py-2.5 rounded-xl font-bold font-heading flex items-center gap-2 transition-all text-sm ${
+                    activeMedia === 'image' 
+                      ? 'bg-[#ae5514] text-[#f3f2e9] shadow-md hover:bg-[#89350a]' 
+                      : 'bg-white text-[#657575] border border-[#a7b8b4]/40 hover:bg-[#f3f2e9]'
+                  }`}
+                  onClick={() => {
+                    playSound()
+                    setActiveMedia('image')
+                  }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <ImageIcon size={18} />
+                  Foto's
+                </motion.button>
+                
+                <motion.button 
+                  className={`px-5 py-2.5 rounded-xl font-bold font-heading flex items-center gap-2 transition-all text-sm ${
+                    activeMedia === 'video' 
+                      ? 'bg-[#ae5514] text-[#f3f2e9] shadow-md hover:bg-[#89350a]' 
+                      : 'bg-white text-[#657575] border border-[#a7b8b4]/40 hover:bg-[#f3f2e9]'
+                  }`}
+                  onClick={() => {
+                    playSound()
+                    setActiveMedia('video')
+                  }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Video size={18} />
+                  Video
+                </motion.button>
+              </div>
+              
               {/* Top Section: Title & Year */}
               <motion.div 
                 className="mb-8 mt-4"
@@ -511,9 +549,11 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
                   !isLoadingSections &&
                   eventData.description && 
                   (!eventData.has_key_moments && keyMoments.length === 0) && (
-                    <p className="text-[#657575] leading-relaxed text-lg lg:text-xl mb-8 font-light">
-                      {eventData.description}
-                    </p>
+                    <div className="relative group/reader">
+                      <p className="text-[#657575] leading-relaxed text-lg lg:text-xl mb-8 font-light">
+                        {eventData.description}
+                      </p>
+                    </div>
                   )}
               </motion.div>
 
@@ -549,7 +589,7 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
 
                       {/* Description shown HERE if key moments exist */}
                       {eventData.description && (
-                        <div className="mt-8 pt-6 border-t border-[#a7b8b4]/30">
+                        <div className="mt-8 pt-6 border-t border-[#a7b8b4]/30 relative group/reader">
                             <p className="text-[#657575] leading-relaxed text-lg lg:text-xl font-light">
                                 {eventData.description}
                             </p>
@@ -568,19 +608,23 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
                         section.has_border === "1"
                         
                        return hasBorder ? (
-                        <div key={`section-border-${section.id || index}`} className="bg-[#f3f2e9] rounded-2xl p-6 lg:p-8 border border-[#a7b8b4]/40 hover:border-[#c9a300]/30 shadow-sm transition-all duration-300">
-                          <h3 className="text-xl lg:text-2xl font-bold text-[#c9a300] mb-4 font-heading">
-                            {section.section_title}
-                          </h3>
+                        <div key={`section-border-${section.id || index}`} className="bg-[#f3f2e9] rounded-2xl p-6 lg:p-8 border border-[#a7b8b4]/40 hover:border-[#c9a300]/30 shadow-sm transition-all duration-300 relative group/reader">
+                          <div className="flex justify-between items-start mb-4">
+                            <h3 className="text-xl lg:text-2xl font-bold text-[#c9a300] font-heading pr-8">
+                              {section.section_title}
+                            </h3>
+                          </div>
                           <p className="text-[#657575] leading-relaxed text-base lg:text-lg">
                             {section.section_content}
                           </p>
                         </div>
                        ) : (
-                        <div key={`section-plain-${section.id || index}`} className="py-2">
-                          <h3 className="text-xl lg:text-2xl font-bold text-[#440f0f] mb-4 font-heading">
-                            {section.section_title}
-                          </h3>
+                        <div key={`section-plain-${section.id || index}`} className="py-2 relative group/reader">
+                          <div className="flex justify-between items-start mb-4">
+                            <h3 className="text-xl lg:text-2xl font-bold text-[#440f0f] font-heading pr-8">
+                              {section.section_title}
+                            </h3>
+                          </div>
                           <p className="text-[#657575] leading-relaxed text-base lg:text-lg">
                             {section.section_content}
                           </p>
@@ -606,130 +650,44 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
                   </div>
                 )}
                 
-                {/* Interactive Buttons (Audio Guide & Puzzle) - RESTORED */}
+                {/* Game Buttons - Based on game_type */}
                 <div className="space-y-4 lg:space-y-6 mt-8 pt-4">
-                   {/* Audio Guide */}
-                  <motion.button
-                    className={`w-full py-4 lg:py-5 px-6 lg:px-8 bg-gradient-to-r from-[#c9a300] to-[#b48a0f] hover:from-[#b48a0f] hover:to-[#89350a] text-[#f3f2e9] rounded-2xl font-bold font-heading text-sm lg:text-base xl:text-lg flex items-center justify-center gap-3 shadow-lg min-h-[50px] lg:min-h-[60px] transition-all`}
-                    onClick={handleAudioGuide}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <Play
-                      size={24}
-                      className={isAudioPlaying ? "animate-pulse" : ""}
-                    />
-                    {isAudioPlaying
-                      ? "Audio Guide aan het spelen..."
-                      : "Audio Guide"}
-                  </motion.button>
-                  
-                  {/* Puzzle Game Button */}
                   {(() => {
-                    // Check has_puzzle - try both snake_case (from API) and camelCase (from Timeline transform)
-                    const hasPuzzleRaw = eventData?.has_puzzle ?? eventData?.hasPuzzle
-                    const hasPuzzle =
-                      hasPuzzleRaw === true ||
-                      hasPuzzleRaw === 1 ||
-                      hasPuzzleRaw === "1" ||
-                      hasPuzzleRaw === "true" ||
-                      (typeof hasPuzzleRaw === "string" && hasPuzzleRaw.toLowerCase() === "true") ||
-                      (hasPuzzleRaw !== false && hasPuzzleRaw !== 0 && hasPuzzleRaw !== "0" && hasPuzzleRaw !== null && hasPuzzleRaw !== undefined && hasPuzzleRaw !== "")
-
-                    // Check puzzle_image_url - try both snake_case (from API) and camelCase (from Timeline transform)
-                    const puzzleImage = eventData?.puzzle_image_url || eventData?.puzzleImage || eventData?.puzzle_image
+                    // Get game_type from eventData (supports both snake_case and camelCase)
+                    const gameType = eventData?.game_type || eventData?.gameType || 'none'
                     
-                    const hasPuzzleImage =
-                      puzzleImage &&
-                      typeof puzzleImage === "string" &&
-                      puzzleImage.trim() !== "" &&
-                      puzzleImage !== null &&
-                      puzzleImage !== "null" &&
-                      puzzleImage !== "undefined"
-
-                    // Debug puzzle logic - always log to help diagnose
-                    console.group("🔍 Puzzle Debug for event:", eventData?.id, eventData?.title)
-                    console.log("has_puzzle (snake_case):", eventData?.has_puzzle, "| type:", typeof eventData?.has_puzzle)
-                    console.log("hasPuzzle (camelCase):", eventData?.hasPuzzle, "| type:", typeof eventData?.hasPuzzle)
-                    console.log("has_puzzle (raw, after fallback):", hasPuzzleRaw, "| type:", typeof hasPuzzleRaw)
-                    console.log("has_puzzle (evaluated):", hasPuzzle)
-                    console.log("puzzle_image_url (snake_case):", eventData?.puzzle_image_url)
-                    console.log("puzzleImage (camelCase):", eventData?.puzzleImage)
-                    console.log("puzzleImage (after fallback):", puzzleImage)
-                    console.log("hasPuzzleImage:", hasPuzzleImage)
-                    console.log("Full eventData object:", eventData)
-                    console.log("---")
+                    console.log("🎮 Game type for event:", eventData?.id, eventData?.title, "->", gameType)
                     
-                    const shouldShow = hasPuzzle && hasPuzzleImage
-                    if (!shouldShow) {
-                      console.error("❌ Puzzle button NOT shown because:")
-                      console.error("  - hasPuzzle:", hasPuzzle, "(" + (hasPuzzle ? "✓ OK" : "✗ FAILED") + ")")
-                      console.error("  - hasPuzzleImage:", hasPuzzleImage, "(" + (hasPuzzleImage ? "✓ OK" : "✗ FAILED") + ")")
-                      if (!hasPuzzle) {
-                        console.error("  → REASON: has_puzzle/hasPuzzle is", hasPuzzleRaw, "- expected true/1/'1'")
-                        console.error("    (checked both snake_case and camelCase)")
-                      }
-                      if (!hasPuzzleImage) {
-                        console.error("  → REASON: puzzle_image_url/puzzleImage is", puzzleImage, "- expected non-empty string")
-                        console.error("    (checked both snake_case and camelCase)")
-                      }
-                    } else {
-                      console.log("✅ Puzzle button WILL be shown - both conditions met!")
+                    if (gameType === 'puzzle') {
+                      return (
+                        <motion.button
+                          className={`w-full py-4 lg:py-5 px-6 lg:px-8 bg-gradient-to-r from-[#c9a300] to-[#a68600] hover:brightness-110 text-white rounded-2xl font-bold font-heading text-sm lg:text-base xl:text-lg flex items-center justify-center gap-3 shadow-lg min-h-[50px] lg:min-h-[60px] transition-all`}
+                          onClick={handlePuzzleGame}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <Puzzle size={24} />
+                          Speel Puzzle
+                        </motion.button>
+                      )
+                    } else if (gameType === 'memory') {
+                      return (
+                        <motion.button
+                          className={`w-full py-4 lg:py-5 px-6 lg:px-8 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:brightness-110 text-white rounded-2xl font-bold font-heading text-sm lg:text-base xl:text-lg flex items-center justify-center gap-3 shadow-lg min-h-[50px] lg:min-h-[60px] transition-all`}
+                          onClick={handleMemoryGame}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <Brain size={24} />
+                          Speel Memory
+                        </motion.button>
+                      )
                     }
-                    console.groupEnd()
-
-                    return shouldShow
-                  })() && (
-                    <motion.button
-                      className={`w-full py-4 lg:py-5 px-6 lg:px-8 bg-gradient-to-r from-[#ae5514] to-[#89350a] hover:brightness-110 text-[#f3f2e9] rounded-2xl font-bold font-heading text-sm lg:text-base xl:text-lg flex items-center justify-center gap-3 shadow-lg min-h-[50px] lg:min-h-[60px] transition-all`}
-                      onClick={handlePuzzleGame}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <Puzzle size={24} />
-                      Speel Puzzle
-                    </motion.button>
-                  )}
+                    return null
+                  })()}
                 </div>
 
               </motion.div>
-
-              {/* Bottom Section: Media Toggle Buttons (Aligned right) */}
-              <div className="mt-12 pt-6 border-t border-[#a7b8b4]/20 flex justify-end gap-3">
-                <motion.button 
-                  className={`px-5 py-2.5 rounded-xl font-bold font-heading flex items-center gap-2 transition-all text-sm ${
-                    activeMedia === 'image' 
-                      ? 'bg-[#ae5514] text-[#f3f2e9] shadow-md hover:bg-[#89350a]' 
-                      : 'bg-white text-[#657575] border border-[#a7b8b4]/40 hover:bg-[#f3f2e9]'
-                  }`}
-                  onClick={() => {
-                    playSound()
-                    setActiveMedia('image')
-                  }}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <ImageIcon size={18} />
-                  Foto's
-                </motion.button>
-                
-                <motion.button 
-                  className={`px-5 py-2.5 rounded-xl font-bold font-heading flex items-center gap-2 transition-all text-sm ${
-                    activeMedia === 'video' 
-                      ? 'bg-[#ae5514] text-[#f3f2e9] shadow-md hover:bg-[#89350a]' 
-                      : 'bg-white text-[#657575] border border-[#a7b8b4]/40 hover:bg-[#f3f2e9]'
-                  }`}
-                  onClick={() => {
-                    playSound()
-                    setActiveMedia('video')
-                  }}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Video size={18} />
-                  Video
-                </motion.button>
-              </div>
 
             </div>
           </motion.div>
@@ -741,6 +699,13 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
         isOpen={isImagePuzzleModalOpen}
         onClose={handleCloseImagePuzzleModal}
         puzzleImage={puzzleImageUrl}
+      />
+
+      {/* Memory Game Modal (nested) */}
+      <MemoryGame
+        isOpen={isMemoryGameModalOpen}
+        onClose={handleCloseMemoryGameModal}
+        images={galleryImages.length > 0 ? galleryImages.map(img => img.src || img) : null}
       />
     </AnimatePresence>
   )
