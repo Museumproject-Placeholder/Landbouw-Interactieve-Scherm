@@ -155,7 +155,6 @@ $result = mysqli_query($conn, $query);
                         <th>Titel</th>
                         <th>Beschrijving</th>
                         <th>Categorie</th>
-                        <th>Stage</th>
                         <th>Puzzle?</th>
                         <th>Actief?</th>
                         <th>Acties</th>
@@ -168,7 +167,6 @@ $result = mysqli_query($conn, $query);
                         <td><?= htmlspecialchars($row['title']) ?></td>
                         <td><?= htmlspecialchars(mb_substr($row['description'], 0, 100)) ?><?= mb_strlen($row['description']) > 100 ? '...' : '' ?></td>
                         <td><?= htmlspecialchars($row['category'] ?? 'museum') ?></td>
-                        <td><?= htmlspecialchars($row['stage']) ?></td>
                         <td><?= $row['has_puzzle'] ? '✅' : '❌' ?></td>
                         <td><?= $row['is_active'] ? '✅' : '❌' ?></td>
                         <td class="actions">

@@ -285,6 +285,7 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
 
   if (!isOpen || !eventData) return null
 
+
   const handlePuzzleGame = () => {
     playSound()
     setIsImagePuzzleModalOpen(true)
@@ -543,19 +544,23 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
                 <h1 className="text-4xl lg:text-5xl xl:text-6xl font-bold mb-6 text-[#c9a300] leading-tight tracking-tight font-heading">
                   {eventData.title}
                 </h1>
-                
-                {/* Event Description - ONLY if NO key moments */}
-                {eventSections.length === 0 &&
-                  !isLoadingSections &&
-                  eventData.description && 
-                  (!eventData.has_key_moments && keyMoments.length === 0) && (
-                    <div className="relative group/reader">
-                      <p className="text-[#657575] leading-relaxed text-lg lg:text-xl mb-8 font-light">
-                        {eventData.description}
-                      </p>
-                    </div>
-                  )}
               </motion.div>
+
+              {/* Description Section - Always show if exists, before sections */}
+              {eventData?.description && eventData.description.trim() !== "" && (
+                <motion.div 
+                  className="mb-8"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.25 }}
+                >
+                  <div className="relative group/reader">
+                    <p className="text-[#657575] leading-relaxed text-lg lg:text-xl font-light">
+                      {eventData.description}
+                    </p>
+                  </div>
+                </motion.div>
+              )}
 
               {/* Middle Section: Dynamic Content */}
               <motion.div 
@@ -565,6 +570,28 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
                 transition={{ delay: 0.3 }}
               >
                 
+                {/* Historical Context */}
+                {(() => {
+                  const historicalContext = eventData?.historicalContext || eventData?.historical_context || "";
+                  const hasContext = historicalContext && historicalContext.trim() !== "";
+                  
+                  if (!hasContext) return null;
+                  
+                  return (
+                    <div className="mb-8">
+                      <div className="flex items-center gap-2 text-[#440f0f] font-bold text-xl mb-4 font-heading">
+                        <Clock size={24} className="text-[#440f0f]" />
+                        <h3>Historische Context</h3>
+                      </div>
+                      <div className="bg-[#f3f2e9] rounded-2xl p-6 lg:p-8 border border-[#a7b8b4]/40 shadow-sm">
+                        <p className="text-[#657575] leading-relaxed text-base lg:text-lg font-light">
+                          {historicalContext}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Key Moments - Mini Timeline */}
                 {(eventData?.has_key_moments || keyMoments.length > 0) && (
                    <div className="mb-8">
@@ -587,14 +614,6 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
                         <p className="text-sm text-[#657575] italic">Geen momenten gevonden.</p>
                       )}
 
-                      {/* Description shown HERE if key moments exist */}
-                      {eventData.description && (
-                        <div className="mt-8 pt-6 border-t border-[#a7b8b4]/30 relative group/reader">
-                            <p className="text-[#657575] leading-relaxed text-lg lg:text-xl font-light">
-                                {eventData.description}
-                            </p>
-                        </div>
-                      )}
                    </div>
                 )}
 
@@ -619,11 +638,11 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
                           </p>
                         </div>
                        ) : (
-                        <div key={`section-plain-${section.id || index}`} className="py-2 relative group/reader">
-                          <div className="flex justify-between items-start mb-4">
-                            <h3 className="text-xl lg:text-2xl font-bold text-[#440f0f] font-heading pr-8">
+                        <div key={`section-plain-${section.id || index}`} className="py-4 relative group/reader border-b border-[#a7b8b4]/20 last:border-b-0">
+                          <div className="flex justify-between items-start mb-3">
+                            <h4 className="text-lg lg:text-xl font-semibold text-[#440f0f] font-heading pr-8">
                               {section.section_title}
-                            </h3>
+                            </h4>
                           </div>
                           <p className="text-[#657575] leading-relaxed text-base lg:text-lg">
                             {section.section_content}
@@ -660,15 +679,15 @@ const TimelineDetailModal = ({ isOpen, onClose, eventData }) => {
                     
                     if (gameType === 'puzzle') {
                       return (
-                        <motion.button
+                    <motion.button
                           className={`w-full py-4 lg:py-5 px-6 lg:px-8 bg-gradient-to-r from-[#c9a300] to-[#a68600] hover:brightness-110 text-white rounded-2xl font-bold font-heading text-sm lg:text-base xl:text-lg flex items-center justify-center gap-3 shadow-lg min-h-[50px] lg:min-h-[60px] transition-all`}
-                          onClick={handlePuzzleGame}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <Puzzle size={24} />
-                          Speel Puzzle
-                        </motion.button>
+                      onClick={handlePuzzleGame}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <Puzzle size={24} />
+                      Speel Puzzle
+                    </motion.button>
                       )
                     } else if (gameType === 'memory') {
                       return (

@@ -18,6 +18,7 @@ import {
   groupEventsByMarkers,
   calculateEventPosition,
   extractYear as extractYearUtil,
+  formatYearRange,
 } from "../../utils/timelineCalculations"
 
 import backgroundTimelineVideo from "../../assets/video/5197931-uhd_3840_2160_30fps.mp4"
@@ -350,7 +351,6 @@ const Timeline = () => {
         description: event.description || "",
         gradient: gradients.gradient,
         museumGradient: gradients.museumGradient,
-        stage: event.stage || 1,
         hasPuzzle:
           event.has_puzzle === true ||
           event.has_puzzle === 1 ||
@@ -362,7 +362,6 @@ const Timeline = () => {
             : null,
         gameType: event.game_type || "none", // 'none', 'puzzle', 'memory'
         hasGame: event.game_type && event.game_type !== "none", // true if any game is enabled
-        icon: event.icon || "🌾",
         useDetailedModal: true, // Always use detailed modal
         historicalContext: event.historical_context || "",
         has_key_moments:
@@ -884,7 +883,7 @@ const Timeline = () => {
                                   textShadow: "0 2px 4px rgba(0,0,0,0.1)",
                                 }}
                               >
-                                {extractYearUtil(period.year)}
+                                {formatYearRange(period.year)}
                               </span>
                             </div>
 
@@ -918,7 +917,7 @@ const Timeline = () => {
                                         textShadow: "0 2px 4px rgba(0,0,0,0.1)",
                                       }}
                                     >
-                                      {extractYearUtil(period.year)}
+                                      {formatYearRange(period.year)}
                                     </span>
                                   </div>
 
@@ -961,7 +960,7 @@ const Timeline = () => {
                                                 "0 2px 4px rgba(0,0,0,0.1)",
                                             }}
                                           >
-                                            {extractYearUtil(period.year)}
+                                            {formatYearRange(period.year)}
                                           </span>
                                         </div>
 

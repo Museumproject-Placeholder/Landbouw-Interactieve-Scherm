@@ -16,6 +16,36 @@ export const extractYear = (yearString) => {
 }
 
 /**
+ * Format year as a range for display (e.g., "1900 - 1910")
+ * If year is already a range (e.g., "1900-1910" or "1900 - 1910"), displays it as "1900 - 1910"
+ * If year is single (e.g., "1900"), displays as "1900 - 1910" (10 year range)
+ * @param {string} yearString - Year string from event
+ * @returns {string} - Formatted year range string
+ */
+export const formatYearRange = (yearString) => {
+  if (!yearString) return ""
+  
+  // Convert to string if it's not already
+  const yearStr = String(yearString).trim()
+  
+  // Check if year string contains a range (handles both "1900-1910" and "1900 - 1910")
+  const rangeMatch = yearStr.match(/(\d{4})\s*-\s*(\d{4})/)
+  if (rangeMatch) {
+    return `${rangeMatch[1]} - ${rangeMatch[2]}`
+  }
+  
+  // Extract single year
+  const yearMatch = yearStr.match(/\d{4}/)
+  if (yearMatch) {
+    const startYear = parseInt(yearMatch[0], 10)
+    const endYear = startYear + 10
+    return `${startYear} - ${endYear}`
+  }
+  
+  return yearStr
+}
+
+/**
  * Generate timeline years with optimal spacing
  * Automatically calculates years to display above events
  * 

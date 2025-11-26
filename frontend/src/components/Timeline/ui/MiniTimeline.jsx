@@ -9,12 +9,6 @@ const MiniTimeline = ({ events, activeYear }) => {
 
   return (
     <div className="w-full py-8">
-      {/* Title */}
-      <h3 className={`text-xl font-bold ${theme.text.dark || 'text-white'} mb-8 flex items-center gap-2`}>
-        <span>⏱</span>
-        <span>Belangrijke momenten</span>
-      </h3>
-
       {/* Timeline Container */}
       <div className="relative px-4">
         {/* Base Line - gray background */}
