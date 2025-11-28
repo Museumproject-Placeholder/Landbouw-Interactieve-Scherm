@@ -1,0 +1,204 @@
+$color-primary: #929d7c;
+$color-secondary: #b5cbd1;
+$color-tertiary: #89350a;
+
+$color-success: #28a745;
+$color-info: #17a2b8;
+$color-warning: #ffc107;
+$color-danger: #dc3545;
+$color-light: #f8f9fa;
+$color-dark: #343a40;
+
+$color-white: #fff;
+$color-black: #000;
+$color-gray: #6c757d;
+$color-gray-dark: #343a40;
+$color-gray-light: #f8f9fa;
+$color-gray-lighter: #edeeee;
+$color-gray-lightest: #e2e5e7;
+
+$font-size-sm: 0.875rem;
+$font-size-base: 1rem;
+$font-size-l: 1.1rem;
+$font-size-lg: 1.25rem;
+$font-size-xl: 2rem;
+$font-size-xxl: 3rem;
+
+$font-weight-light: 300;
+$font-weight-normal: 400;
+$font-weight-lightbold: 500;
+$font-weight-bold: 700;
+
+$border-radius-s: 8px;
+$border-radius-m: 30px;
+$border-radius-circle: 50%;
+
+$site-max-width: 1250px;
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Josefin Sans", sans-serif;
+}
+
+html {
+    scroll-behavior: smooth;
+    overflow-x: hidden;
+}
+
+/* Stylings for whole site */
+ul {
+    list-style: none;
+}
+
+a {
+    text-decoration: none;
+
+    &:hover {
+        transition: all 0.3s ease;
+    }
+}
+
+button,
+.material-symbols-outlined {
+    cursor: pointer;
+    background: none;
+    border: none;
+}
+
+img {
+    width: 100%;
+}
+
+:where(section, footer) .section-content {
+    margin: 0 auto;
+    padding: 0 20px;
+    max-width: $site-max-width;
+}
+
+body {
+    position: relative;
+    background-color: $color-light;
+
+    &.login {
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: url("../../assets/images/background_timeline.jpg") no-repeat center center/cover;
+        background-position-y: bottom;
+
+        .login-container {
+            background-color: $color-white;
+            padding: 40px;
+            border-radius: $border-radius-s;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 470px;
+
+            h2 {
+                margin-bottom: 22px;
+                font-size: $font-size-xl;
+                color: $color-dark;
+                text-align: center;
+            }
+
+            form {
+                display: flex;
+                flex-direction: column;
+
+                .form__group {
+                    display: flex;
+                    flex-direction: column;
+                    margin-bottom: 15px;
+
+                    label {
+                        margin-bottom: 5px;
+                        font-size: $font-size-base;
+                        color: $color-gray-dark;
+                    }
+
+                    input {
+                        padding: 10px;
+                        margin-bottom: 15px;
+                        border: 1px solid $color-gray-lightest;
+                        border-radius: $border-radius-s;
+                        font-size: $font-size-base;
+
+                        &:focus {
+                            border-color: $color-primary;
+                            outline: none;
+                            box-shadow: 0 0 5px rgba($color-primary, 0.5);
+                        }
+                    }
+                }
+
+                button {
+                    padding: 10px;
+                    background-color: $color-primary;
+                    color: $color-white;
+                    font-size: $font-size-base;
+                    font-weight: $font-weight-bold;
+                    border-radius: $border-radius-s;
+                    transition: background-color 0.3s ease;
+
+                    &:hover {
+                        background-color: #747f63;
+                    }
+                }
+            }
+        }
+    }
+
+    &.dashboard {
+        background-color: $color-gray-lighter;
+        padding-bottom: 50px;
+        min-height: 100vh;
+
+        .dashboard-header {
+            display: flex;
+            flex-direction: row;
+            background-color: $color-white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            padding: 10px 20px;
+
+            .dashboard-nav {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 20px;
+                max-width: $site-max-width;
+                width: 100%;
+                margin: 0 auto;
+
+                .logo-container {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    
+                    img {
+                        height: 70px;
+                        width: auto;
+                        border-radius: $border-radius-circle;
+                    }
+                }
+
+                ul {
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+
+                    li {
+                        a {
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
