@@ -1,0 +1,32 @@
+# Enable rewrite engine
+RewriteEngine On
+
+# Allow CORS (must be before rewrite rules)
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization"
+</IfModule>
+
+# Redirect all requests to api/index.php
+# BUT: Don't rewrite if the file actually exists (like test_media_endpoint.php)
+# Handle /api/... paths
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/(.*)$ api/index.php [QSA,L]
+
+# Handle /backend/api/... paths (if .htaccess is in backend/)
+# BUT: Don't rewrite if the file actually exists
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^backend/api/(.*)$ api/index.php [QSA,L]
+
+# Handle direct event media requests as fallback
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/event/(\d+)/media$ api/index.php?event_id=$1 [QSA,L]
+
+# Handle /backend/api/event/{id}/media paths
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^backend/api/event/(\d+)/media$ api/index.php?event_id=$1 [QSA,L]

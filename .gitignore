@@ -1,2 +1,40 @@
+# Dependencies
 node_modules/
-.claude/
+package-lock.json
+
+# Build outputs
+frontend/dist/
+frontend/build/
+*.log
+*.log.*
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+.cache/
+*.cache
+
+# PHP
+backend/php_server.log
+backend/test.php
+
+# Backup files
+*.bak
+*~

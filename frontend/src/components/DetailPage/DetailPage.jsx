@@ -30,7 +30,15 @@ const DetailPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div 
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          overscrollBehavior: 'none',
+          overscrollBehaviorY: 'none',
+          overscrollBehaviorX: 'none',
+          touchAction: 'pan-x pan-y',
+        }}
+      >
         <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600"></div>
       </div>
     );
@@ -38,7 +46,15 @@ const DetailPage = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div 
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          overscrollBehavior: 'none',
+          overscrollBehaviorY: 'none',
+          overscrollBehaviorX: 'none',
+          touchAction: 'pan-x pan-y',
+        }}
+      >
         <div className="text-center">
           <p className="text-red-600 mb-4">Error loading content: {error}</p>
           <BackButton />
@@ -49,7 +65,15 @@ const DetailPage = () => {
 
   if (!content) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div 
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          overscrollBehavior: 'none',
+          overscrollBehaviorY: 'none',
+          overscrollBehaviorX: 'none',
+          touchAction: 'pan-x pan-y',
+        }}
+      >
         <div className="text-center">
           <p className="text-gray-600 mb-4">Content not found</p>
           <BackButton />
@@ -59,7 +83,15 @@ const DetailPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div 
+      className="min-h-screen bg-gray-50"
+      style={{
+        overscrollBehavior: 'none',
+        overscrollBehaviorY: 'none',
+        overscrollBehaviorX: 'none',
+        touchAction: 'pan-x pan-y',
+      }}
+    >
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <BackButton />

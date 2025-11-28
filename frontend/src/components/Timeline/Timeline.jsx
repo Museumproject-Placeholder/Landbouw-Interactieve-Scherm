@@ -1,465 +1,1324 @@
-import React, { useState, useRef, useEffect } from "react"
+import React, { useState, useRef, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import TimelineModal from "./TimelineModal"
+import { Puzzle } from "lucide-react"
+import TimelineDetailModal from "./modals/TimelineDetailModal"
+import MuseumHeadline from "./content/MuseumHeadline"
+import VirtualGuide from "./content/VirtualGuide"
+import StudentenwerkLogo from "../Common/StudentenwerkLogo"
+import IdleScreen from "./content/IdleScreen"
+import AnimatedAnimals from "./content/AnimatedAnimals"
+import { getTheme } from "../../config/themes"
+import { useTimeline } from "../../hooks/useTimeline"
+import { useSound } from "../../hooks/useSound"
+import { useIdleTimer } from "../../hooks/useIdleTimer"
+import LoadingSkeleton from "./ui/LoadingSkeleton"
+import AnimatedYear from "./ui/AnimatedYear"
+import {
+  generateYearMarkers,
+  groupEventsByMarkers,
+  calculateEventPosition,
+  extractYear as extractYearUtil,
+  formatYearRange,
+} from "../../utils/timelineCalculations"
 
-// Import puzzle images
-import puzzleImg from "../../assets/images/puzzle/brown_cow_kids.jpg"
-// Import background image
-import backgroundTimelineImg from "../../assets/images/timeline/achtergrond3.png"
+import backgroundTimelineVideo from "../../assets/video/5197931-uhd_3840_2160_30fps.mp4"
+
+// Helper function to get border color based on category
+const getCategoryBorderColor = category => {
+  // Normalize category to lowercase for consistent matching
+  const normalizedCategory = category?.toLowerCase() || "museum"
+  const categoryColors = {
+    museum: "#a35514",
+    landbouw: "#22c55e", // green-500
+    maatschappelijk: "#c9a300", // yellow
+  }
+  return categoryColors[normalizedCategory] || categoryColors.museum // Default to museum color
+}
+
+// Hardcoded gradient map for each event year (single years only)
+const GRADIENT_MAP = {
+  1925: {
+    gradient: "from-amber-600 to-orange-500",
+    museumGradient: "from-brand-rust to-brand-terracotta",
+  },
+  1930: {
+    gradient: "from-blue-600 to-cyan-500",
+    museumGradient: "from-brand-sky to-brand-mist",
+  },
+  1945: {
+    gradient: "from-slate-600 to-gray-500",
+    museumGradient: "from-brand-slate to-brand-maroon",
+  },
+  1987: {
+    gradient: "from-green-600 to-emerald-500",
+    museumGradient: "from-brand-olive to-brand-mist",
+  },
+  2006: {
+    gradient: "from-indigo-600 to-purple-500",
+    museumGradient: "from-brand-amber to-brand-terracotta",
+  },
+  2018: {
+    gradient: "from-rose-600 to-pink-500",
+    museumGradient: "from-brand-rust to-brand-gold",
+  },
+  2020: {
+    gradient: "from-teal-600 to-cyan-500",
+    museumGradient: "from-brand-mist to-brand-sky",
+  },
+  2023: {
+    gradient: "from-yellow-500 to-amber-600",
+    museumGradient: "from-brand-gold to-brand-amber",
+  },
+  2026: {
+    gradient: "from-violet-600 to-fuchsia-500",
+    museumGradient: "from-brand-amber to-brand-rust",
+  },
+}
+
+// Available gradient palettes for new events (rotated based on year)
+const GRADIENT_PALETTE = [
+  {
+    gradient: "from-amber-600 to-orange-500",
+    museumGradient: "from-brand-rust to-brand-terracotta",
+  },
+  {
+    gradient: "from-blue-600 to-cyan-500",
+    museumGradient: "from-brand-sky to-brand-mist",
+  },
+  {
+    gradient: "from-slate-600 to-gray-500",
+    museumGradient: "from-brand-slate to-brand-maroon",
+  },
+  {
+    gradient: "from-green-600 to-emerald-500",
+    museumGradient: "from-brand-olive to-brand-mist",
+  },
+  {
+    gradient: "from-indigo-600 to-purple-500",
+    museumGradient: "from-brand-amber to-brand-terracotta",
+  },
+  {
+    gradient: "from-rose-600 to-pink-500",
+    museumGradient: "from-brand-rust to-brand-gold",
+  },
+  {
+    gradient: "from-teal-600 to-cyan-500",
+    museumGradient: "from-brand-mist to-brand-sky",
+  },
+  {
+    gradient: "from-yellow-500 to-amber-600",
+    museumGradient: "from-brand-gold to-brand-amber",
+  },
+  {
+    gradient: "from-violet-600 to-fuchsia-500",
+    museumGradient: "from-brand-amber to-brand-rust",
+  },
+]
+
+// Helper function to extract numeric year from year string (e.g. "1925", "1930-1956" -> 1925, 1930)
+const extractYear = yearString => {
+  if (!yearString) return null
+  const match = yearString.match(/\d{4}/)
+  return match ? parseInt(match[0], 10) : null
+}
+
+// Helper function to get gradient for an event
+const getGradientForEvent = event => {
+  // Extract numeric year from year string (handles both "1925" and legacy "1930-1956" formats)
+  const yearString = event.year || ""
+  const numericYear = extractYear(yearString)
+  const gradientData = numericYear ? GRADIENT_MAP[numericYear] : null
+
+  // If year is in hardcoded map, use it (or database value if exists)
+  if (gradientData) {
+    return {
+      gradient: event.gradient || gradientData.gradient,
+      museumGradient: event.museum_gradient || gradientData.museumGradient,
+    }
+  }
+
+  // If gradient exists in database, use it
+  if (event.gradient || event.museum_gradient) {
+    return {
+      gradient: event.gradient || "from-gray-600 to-gray-500",
+      museumGradient:
+        event.museum_gradient || "from-brand-rust to-brand-terracotta",
+    }
+  }
+
+  // For new events: assign gradient based on year (rotates through palette)
+  if (numericYear) {
+    // Use modulo to cycle through available gradients
+    const paletteIndex = Math.abs(numericYear - 1900) % GRADIENT_PALETTE.length
+    const selectedPalette = GRADIENT_PALETTE[paletteIndex]
+    return {
+      gradient: selectedPalette.gradient,
+      museumGradient: selectedPalette.museumGradient,
+    }
+  }
+
+  // Final fallback
+  return {
+    gradient: "from-gray-600 to-gray-500",
+    museumGradient: "from-brand-rust to-brand-terracotta",
+  }
+}
+
+// Swipe Hint Component
+const SwipeHint = ({ visible }) => (
+  <AnimatePresence>
+    {visible && (
+      <motion.div
+        className="absolute right-8 top-1/2 -translate-y-1/2 z-40 pointer-events-none flex flex-col items-center gap-2"
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 20 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shadow-lg border border-white/30 animate-pulse">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="animate-bounce-x"
+          >
+            <path d="M5 12h14" />
+            <path d="M12 5l7 7-7 7" />
+          </svg>
+        </div>
+        <span className="text-white/80 text-sm font-medium tracking-wider uppercase drop-shadow-md">
+          Veeg
+        </span>
+      </motion.div>
+    )}
+  </AnimatePresence>
+)
+
+// Era Background Component
+const EraBackground = ({ currentYear, theme }) => {
+  // Calculate decade (e.g., 1930, 1940)
+  const decade = Math.floor(currentYear / 10) * 10
+
+  return (
+    <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden flex items-center justify-center">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={decade}
+          className="text-[20vw] font-bold font-heading opacity-[0.15] select-none whitespace-nowrap"
+          style={{ color: theme.colors.gold }}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 0.15, scale: 1 }}
+          exit={{ opacity: 0, scale: 1.1 }}
+          transition={{ duration: 1 }}
+        >
+          Jaren '{decade.toString().slice(2)}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// Timeline Scrubber Component
+const TimelineScrubber = ({ scrollProgress, onScrub, theme }) => {
+  const scrubberRef = useRef(null)
+
+  const handleClick = e => {
+    if (!scrubberRef.current) return
+    const rect = scrubberRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const percentage = Math.max(0, Math.min(1, x / rect.width))
+    onScrub(percentage)
+  }
+
+  return (
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[80%] max-w-4xl z-50 h-12 flex items-center justify-center">
+      <div
+        className="relative w-full h-1 bg-black/20 rounded-full cursor-pointer group"
+        ref={scrubberRef}
+        onClick={handleClick}
+      >
+        {/* Track */}
+        <div className="absolute inset-0 bg-white/30 rounded-full backdrop-blur-sm" />
+
+        {/* Progress Fill */}
+        <motion.div
+          className="absolute left-0 top-0 bottom-0 rounded-full"
+          style={{
+            width: `${scrollProgress * 100}%`,
+            background: theme.colors.gold,
+          }}
+        />
+
+        {/* Thumb */}
+        <motion.div
+          className="absolute top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full shadow-lg border-2 cursor-grab active:cursor-grabbing hover:scale-110 transition-transform"
+          style={{
+            left: `${scrollProgress * 100}%`,
+            borderColor: theme.colors.gold,
+            marginLeft: "-12px", // Center thumb
+          }}
+        />
+
+        {/* Decade Markers */}
+        {[0, 0.25, 0.5, 0.75, 1].map((pos, i) => (
+          <div
+            key={i}
+            className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white/50 rounded-full pointer-events-none"
+            style={{ left: `${pos * 100}%`, marginLeft: "-8px" }}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
 
 const Timeline = () => {
+  const theme = getTheme()
+  const { timelineData: apiData, loading, error } = useTimeline()
+  const playSound = useSound()
   const [selectedPeriod, setSelectedPeriod] = useState(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [selectedTimelineItem, setSelectedTimelineItem] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
   const [startX, setStartX] = useState(0)
   const [scrollLeft, setScrollLeft] = useState(0)
-  const [showSwipeHint, setShowSwipeHint] = useState(true)
-  const [lastActivityTime, setLastActivityTime] = useState(Date.now())
-  const [logoKey, setLogoKey] = useState(0)
+  const [scrollProgress, setScrollProgress] = useState(0)
+  const [currentYear, setCurrentYear] = useState(1925)
+  const [showSwipeHint, setShowSwipeHint] = useState(false)
   const timelineRef = useRef(null)
-  const inactivityTimerRef = useRef(null)
+  const videoRef = useRef(null)
+  const hintTimerRef = useRef(null)
 
-  // Preload background image for faster loading
-  useEffect(() => {
-    const img = new Image()
-    img.src = backgroundTimelineImg
-  }, [])
+  // Idle screen state - start in idle mode
+  const [isIdle, setIsIdle] = useState(true)
+  const [showLoadingAnimation, setShowLoadingAnimation] = useState(false)
 
-  // Inactivity detection system for museum display
-  useEffect(() => {
-    const checkInactivity = () => {
-      const now = Date.now()
-      const timeSinceActivity = now - lastActivityTime
+  // Handle idle timeout (5 minutes)
+  const handleIdle = useRef(() => {
+    setIsIdle(true)
+    setShowLoadingAnimation(false)
+    // Reset timeline state when returning to idle
+    setSelectedPeriod(null)
+    setIsDetailModalOpen(false)
+    setSelectedTimelineItem(null)
+  })
 
-      // Show hint continuously after 8 seconds of inactivity
-      if (timeSinceActivity > 8000) {
-        setShowSwipeHint(true)
-      } else {
-        setShowSwipeHint(false)
-      }
+  // Idle timer - only active when not in idle mode
+  // Timer automatically resets on user interactions (click, touch, scroll, mousemove, keypress)
+  useIdleTimer(300000, handleIdle.current, !isIdle)
+
+  // Handle activation from idle screen
+  const handleActivate = () => {
+    if (isIdle) {
+      setIsIdle(false)
+      setShowLoadingAnimation(true)
+      // Show loading animation for 2 seconds, then show timeline
+      setTimeout(() => {
+        setShowLoadingAnimation(false)
+      }, 2000)
     }
-
-    // Check every 1 second for more responsive behavior
-    inactivityTimerRef.current = setInterval(checkInactivity, 1000)
-
-    return () => {
-      if (inactivityTimerRef.current) {
-        clearInterval(inactivityTimerRef.current)
-      }
-    }
-  }, [lastActivityTime])
-
-  // Auto-restart Firda logo GIF every 15 seconds
-  useEffect(() => {
-    const logoInterval = setInterval(() => {
-      setLogoKey(prev => prev + 1)
-    }, 15000)
-
-    return () => clearInterval(logoInterval)
-  }, [])
-
-  // Reset activity timer on any interaction
-  const resetActivityTimer = () => {
-    setLastActivityTime(Date.now())
-    setShowSwipeHint(false)
   }
 
-  // Fries Landbouwmuseum Timeline - Nederlandse teksten
-  const timelineData = [
-    // ETAP 1: Vroegmoderne landbouw (1600-1800)
-    {
-      id: "golden-age-start",
-      year: "1600",
-      title: "Gouden Eeuw Landbouw",
-      description:
-        "De Friese landbouw bloeit tijdens de Nederlandse Gouden Eeuw. Intensieve veeteelt begint en het beroemde Friese vee en paarden krijgen erkenning in heel Europa.",
-      gradient: "from-yellow-500 to-orange-500",
-      stage: 1,
-      hasPuzzle: true,
-      puzzleImage: puzzleImg,
-    },
-    {
-      id: "land-reclamation",
-      year: "1650",
-      title: "Landaanwinning Tijdperk",
-      description:
-        "Grootschalige drainageprojecten transformeren het Friese landschap. Geavanceerde dijkensystemen en polders creëren nieuw landbouwland en leggen de basis voor moderne landbouw.",
-      gradient: "from-blue-600 to-cyan-500",
-      stage: 1,
-    },
-    {
-      id: "dairy-development",
-      year: "1750",
-      title: "Zuivelindustrie Fundament",
-      description:
-        "Traditionele kaasmakerij en boterproductie worden de hoekstenen van de Friese economie. Boerenfamilies ontwikkelen gespecialiseerde zuiveltechnieken die generaties lang worden doorgegeven.",
-      gradient: "from-green-600 to-emerald-500",
-      stage: 1,
-      hasPuzzle: true,
-      puzzleImage: puzzleImg,
-    },
+  // Handle video loop
+  useEffect(() => {
+    const video = videoRef.current
+    if (video) {
+      video.addEventListener("ended", () => {
+        video.currentTime = 0
+        video.play()
+      })
+    }
+  }, [])
 
-    // ETAP 2: Industrialisatie (1800-1950)
-    {
-      id: "flax-boom",
-      year: "1880",
-      title: "Vlasproductie Hoogtepunt",
-      description:
-        "Friesland wordt de grootste vlasproducent van Nederland. Duizenden arbeiders verwerken vlas in 'braakhokken' tijdens de winter, wat cruciale werkgelegenheid biedt op het platteland.",
-      gradient: "from-indigo-500 to-blue-500",
-      stage: 2,
-      hasPuzzle: true,
-      puzzleImage: puzzleImg,
-    },
-    {
-      id: "mechanization-start",
-      year: "1900",
-      title: "Landbouwmechanisatie",
-      description:
-        "Lokale fabrikanten zoals Hermes in Leeuwarden en Miedema in Winsum beginnen met de productie van landbouwwerktuigen, melkmachines en boerenwagens voor de regio.",
-      gradient: "from-gray-600 to-slate-500",
-      stage: 2,
-    },
-    {
-      id: "cooperatives-birth",
-      year: "1920",
-      title: "Coöperatieve Beweging",
-      description:
-        "Boeren stichten de eerste zuivelcoöperaties en landbouwverenigingen. Collectieve koopkracht en gedeelde kennis transformeren traditionele landbouwpraktijken.",
-      gradient: "from-purple-600 to-indigo-500",
-      stage: 2,
-      hasPuzzle: true,
-      puzzleImage: puzzleImg,
-    },
+  // Map API data to component format
+  const timelineData = useMemo(() => {
+    if (!apiData || apiData.length === 0) return []
 
-    // ETAP 3: Moderne landbouw (1950-heden)
-    {
-      id: "scientific-breeding",
-      year: "1960",
-      title: "Wetenschappelijke Veeteelt",
-      description:
-        "Kunstmatige inseminatie en wetenschappelijke fokprogramma's revolutioneren de rundverbetering. Het Nationaal Veeteelt Museum documenteert deze transformatie van de Friese landbouw.",
-      gradient: "from-red-500 to-pink-500",
-      stage: 3,
-    },
-    {
-      id: "friesian-renaissance",
-      year: "1990",
-      title: "Fries Paard Wereldsucces",
-      description:
-        "Het Friese paard beleeft wereldwijde populariteit. Het Koninklijk Friesch Paarden-Stamboek (KFPS) promoot het ras wereldwijd en maakt het tot een symbool van Nederlands erfgoed.",
-      gradient: "from-purple-600 to-pink-500",
-      stage: 3,
-      hasPuzzle: true,
-      puzzleImage: puzzleImg,
-    },
-    {
-      id: "sustainable-future",
-      year: "2020",
-      title: "Erfgoed & Duurzaamheid",
-      description:
-        "Moderne Friese boerderijen balanceren hightech precisie-landbouw met behoud van traditionele rassen en praktijken. Meer dan 100 zeldzame variëteiten worden behouden voor toekomstige generaties.",
-      gradient: "from-green-500 to-teal-600",
-      stage: 3,
-      hasPuzzle: true,
-      puzzleImage: puzzleImg,
-    },
-  ]
+    return apiData.map(event => {
+      // Get hardcoded gradients based on year
+      const gradients = getGradientForEvent(event)
+
+      return {
+        id: event.id?.toString() || `event-${event.id}`,
+        year: event.year || "",
+        title: event.title || "",
+        description: event.description || "",
+        gradient: gradients.gradient,
+        museumGradient: gradients.museumGradient,
+        hasPuzzle:
+          event.has_puzzle === true ||
+          event.has_puzzle === 1 ||
+          event.has_puzzle === "1" ||
+          Boolean(event.has_puzzle),
+        puzzleImage:
+          event.puzzle_image_url && event.puzzle_image_url.trim() !== ""
+            ? event.puzzle_image_url
+            : null,
+        gameType: event.game_type || "none", // 'none', 'puzzle', 'memory'
+        hasGame: event.game_type && event.game_type !== "none", // true if any game is enabled
+        useDetailedModal: true, // Always use detailed modal
+        historicalContext: event.historical_context || "",
+        has_key_moments:
+          event.has_key_moments === true ||
+          event.has_key_moments === 1 ||
+          event.has_key_moments === "1" ||
+          Boolean(event.has_key_moments),
+        category: (event.category || "museum").toLowerCase(), // Normalize to lowercase and default to museum if not set
+        mainImage: event.main_image || event.image_url || null, // Add main image for card display
+      }
+    })
+  }, [apiData])
+
+  // Calculate min and max years from data
+  const { minYear, maxYear } = useMemo(() => {
+    if (!timelineData || timelineData.length === 0)
+      return { minYear: 1925, maxYear: 2025 }
+
+    const years = timelineData
+      .map(event => extractYearUtil(event.year))
+      .filter(y => y !== null)
+
+    if (years.length === 0) return { minYear: 1925, maxYear: 2025 }
+
+    const min = Math.min(...years)
+    const max = Math.max(...years)
+
+    // Round down/up to nearest 5
+    return {
+      minYear: Math.floor(min / 5) * 5,
+      maxYear: Math.ceil(max / 5) * 5,
+    }
+  }, [timelineData])
+
+  // Generate year markers
+  const yearMarkers = useMemo(() => {
+    return generateYearMarkers(minYear, maxYear, 5)
+  }, [minYear, maxYear])
+
+  // Group events by year markers
+  const timelineSections = useMemo(() => {
+    return groupEventsByMarkers(timelineData, yearMarkers)
+  }, [timelineData, yearMarkers])
 
   const handleMouseDown = e => {
+    // Only handle left mouse button
+    if (e.button !== 0 && e.type === "mousedown") return
     setIsDragging(true)
-    setStartX(e.pageX || e.touches[0].pageX)
-    setScrollLeft(timelineRef.current.scrollLeft)
-    resetActivityTimer()
+    setStartX(e.pageX || (e.touches && e.touches[0]?.pageX) || 0)
+    if (timelineRef.current) {
+      setScrollLeft(timelineRef.current.scrollLeft)
+    }
+    resetHintTimer()
   }
 
   const handleMouseMove = e => {
-    if (!isDragging) return
+    if (!isDragging || !timelineRef.current) return
     e.preventDefault()
-    const x = e.pageX || e.touches[0].pageX
+    e.stopPropagation()
+    const x = e.pageX || (e.touches && e.touches[0]?.pageX) || 0
     const walk = (x - startX) * 2
     const newScrollLeft = scrollLeft - walk
     timelineRef.current.scrollLeft = newScrollLeft
-
+    resetHintTimer()
   }
 
-  const handleMouseUp = () => {
+  const handleMouseUp = e => {
+    // Only handle left mouse button
+    if (e.button !== 0 && e.type === "mouseup") return
     setIsDragging(false)
+    resetHintTimer()
   }
+
+  // Scroll Handler for Progress & Year Calculation
+  const handleScroll = () => {
+    if (!timelineRef.current) return
+
+    const { scrollLeft, scrollWidth, clientWidth } = timelineRef.current
+    const maxScroll = scrollWidth - clientWidth
+    const progress = maxScroll > 0 ? scrollLeft / maxScroll : 0
+    setScrollProgress(progress)
+
+    // Calculate approximate year based on progress
+    const yearRange = maxYear - minYear
+    const year = minYear + Math.round(progress * yearRange)
+    setCurrentYear(year)
+
+    resetHintTimer()
+  }
+
+  // Scrubber Handler
+  const handleScrub = percentage => {
+    if (!timelineRef.current) return
+    const { scrollWidth, clientWidth } = timelineRef.current
+    const maxScroll = scrollWidth - clientWidth
+    const newScrollLeft = maxScroll * percentage
+
+    timelineRef.current.scrollTo({
+      left: newScrollLeft,
+      behavior: "smooth",
+    })
+  }
+
+  // Hint Timer Logic
+  const resetHintTimer = () => {
+    setShowSwipeHint(false)
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
+
+    if (!isIdle && !isDetailModalOpen) {
+      hintTimerRef.current = setTimeout(() => {
+        setShowSwipeHint(true)
+      }, 4000) // Show hint after 4s of inactivity
+    }
+  }
+
+  useEffect(() => {
+    resetHintTimer()
+    return () => {
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
+    }
+  }, [isIdle, isDetailModalOpen])
 
   const handleCardClick = periodId => {
     if (!isDragging) {
+      playSound()
       const timelineItem = timelineData.find(item => item.id === periodId)
-      setSelectedPeriod(periodId)
       setSelectedTimelineItem(timelineItem)
-      setIsModalOpen(true)
-      resetActivityTimer()
+
+      // Always use detailed modal
+      setIsDetailModalOpen(true)
       console.log("Navigeer naar periode:", periodId)
     }
   }
 
-  const closeModal = () => {
-    setIsModalOpen(false)
+  const closeDetailModal = () => {
+    setIsDetailModalOpen(false)
     setSelectedTimelineItem(null)
-    setSelectedPeriod(null)
-    resetActivityTimer()
   }
 
+  // Show loading state with skeleton
+  if (loading) {
+    return (
+      <div
+        className="min-h-screen relative overflow-hidden pt-32"
+        style={{
+          overscrollBehavior: "none",
+          overscrollBehaviorY: "none",
+          overscrollBehaviorX: "none",
+          touchAction: "pan-x pan-y",
+          WebkitOverflowScrolling: "touch",
+        }}
+        onTouchStart={handleMouseDown}
+        onTouchMove={handleMouseMove}
+        onTouchEnd={handleMouseUp}
+      >
+        {/* Background video */}
+        <video
+          ref={videoRef}
+          className="absolute inset-0 w-full h-full object-cover"
+          autoPlay
+          loop
+          muted
+          playsInline
+        >
+          <source src={backgroundTimelineVideo} type="video/mp4" />
+        </video>
+
+        {/* Theme-based overlay - reduced opacity for less orange tint */}
+        <div
+          className={`absolute inset-0 bg-gradient-to-br ${theme.background.primary}`}
+        />
+
+        {/* Subtle pattern overlay - reduced opacity */}
+        <div
+          className={`absolute inset-0 bg-gradient-to-t ${theme.background.overlay}`}
+        />
+
+        {/* Studentenwerk Logo */}
+        <StudentenwerkLogo />
+
+        {/* Headline */}
+        <div className="relative z-10">
+          <MuseumHeadline
+            text="100 jaar geschiedenis"
+            subtext="Fries Landbouwmuseum"
+          />
+        </div>
+
+        {/* Loading Skeletons */}
+        <div className="timeline-container py-8 md:py-16 relative w-full h-full z-10">
+          <div className="relative pb-32 overflow-hidden">
+            <motion.div
+              className="overflow-x-auto scrollbar-hide"
+              style={{
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+              }}
+            >
+              {/* Timeline Line */}
+              <div
+                className={`absolute top-1/2 transform -translate-y-1/2 h-2 bg-gradient-to-r ${theme.timeline.line} w-full min-w-max shadow-lg rounded-full`}
+              >
+                <div
+                  className={`absolute inset-0 bg-gradient-to-r ${theme.timeline.line} blur-sm opacity-70 rounded-full`}
+                />
+              </div>
+
+              {/* Loading Skeletons */}
+              <LoadingSkeleton count={9} />
+            </motion.div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          overscrollBehavior: "none",
+          overscrollBehaviorY: "none",
+          overscrollBehaviorX: "none",
+          touchAction: "pan-x pan-y",
+        }}
+      >
+        <div className="text-center text-red-500">
+          <div className="text-xl">Fout bij het laden van data: {error}</div>
+        </div>
+      </div>
+    )
+  }
+
+  // Fallback to empty array if no data
+  if (!timelineData || timelineData.length === 0) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          overscrollBehavior: "none",
+          overscrollBehaviorY: "none",
+          overscrollBehaviorX: "none",
+          touchAction: "pan-x pan-y",
+        }}
+      >
+        <div className="text-center p-8">
+          <div className="text-2xl font-bold mb-4">
+            Geen timeline data beschikbaar
+          </div>
+          <div className="text-lg mb-2">
+            {error ? (
+              <div className="text-red-500">
+                <p className="mb-2">Fout bij het ophalen van data:</p>
+                <p className="text-sm">{error}</p>
+              </div>
+            ) : (
+              <div>
+                <p className="mb-2">Geen actieve events gevonden.</p>
+                <p className="text-sm text-gray-400">
+                  Controleer of events zijn gemarkeerd als actief in het admin
+                  panel.
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="text-sm text-gray-500 mt-4">
+            API URL:{" "}
+            {import.meta.env.VITE_API_URL || "http://localhost/backend/api"}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show idle screen
+  if (isIdle) {
+    return (
+      <AnimatePresence mode="wait">
+        <IdleScreen key="idle" onActivate={handleActivate} />
+      </AnimatePresence>
+    )
+  }
+
+  // Show loading animation when transitioning from idle
+  if (showLoadingAnimation) {
+    return (
+      <div
+        className="min-h-screen relative overflow-hidden pt-32"
+        style={{
+          overscrollBehavior: "none",
+          overscrollBehaviorY: "none",
+          overscrollBehaviorX: "none",
+          touchAction: "pan-x pan-y",
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
+        {/* Background video */}
+        <video
+          ref={videoRef}
+          className="absolute inset-0 w-full h-full object-cover"
+          autoPlay
+          loop
+          muted
+          playsInline
+        >
+          <source src={backgroundTimelineVideo} type="video/mp4" />
+        </video>
+
+        {/* Theme-based overlay - reduced opacity for less orange tint */}
+        <div
+          className={`absolute inset-0 bg-gradient-to-br ${theme.background.primary}`}
+        />
+
+        {/* Subtle pattern overlay - reduced opacity */}
+        <div
+          className={`absolute inset-0 bg-gradient-to-t ${theme.background.overlay}`}
+        />
+
+        {/* Studentenwerk Logo */}
+        <StudentenwerkLogo />
+
+        {/* Headline */}
+        <div className="relative z-10">
+          <MuseumHeadline
+            text="100 jaar geschiedenis"
+            subtext="Fries Landbouwmuseum"
+          />
+        </div>
+
+        {/* Loading Animation */}
+        <div className="timeline-container py-8 md:py-16 relative w-full h-full z-10">
+          <div className="relative pb-32 overflow-hidden">
+            <motion.div
+              className="overflow-x-auto scrollbar-hide"
+              style={{
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+              }}
+            >
+              {/* Timeline Line */}
+              <div
+                className={`absolute top-1/2 transform -translate-y-1/2 h-2 bg-gradient-to-r ${theme.timeline.line} w-full min-w-max shadow-lg rounded-full`}
+              >
+                <div
+                  className={`absolute inset-0 bg-gradient-to-r ${theme.timeline.line} blur-sm opacity-70 rounded-full`}
+                />
+              </div>
+
+              {/* Loading Skeletons */}
+              <LoadingSkeleton count={9} />
+            </motion.div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
       className="min-h-screen relative overflow-hidden pt-32"
-      onTouchStart={handleMouseDown}
-      onTouchMove={handleMouseMove}
-      onTouchEnd={handleMouseUp}
-      onMouseMove={resetActivityTimer}
-      onClick={resetActivityTimer}
+      style={{
+        overscrollBehavior: "none",
+        overscrollBehaviorY: "none",
+        overscrollBehaviorX: "none",
+        touchAction: "pan-x pan-y",
+        WebkitOverflowScrolling: "touch",
+      }}
     >
-      {/* Background image - more visible */}
+      {/* Background video */}
+      <video
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full object-cover"
+        autoPlay
+        loop
+        muted
+        playsInline
+      >
+        <source src={backgroundTimelineVideo} type="video/mp4" />
+      </video>
+
+      {/* Theme-based overlay - reduced opacity for less orange tint */}
       <div
-        className="absolute inset-0 bg-cover bg-no-repeat"
-        style={{
-          backgroundImage: `url(${backgroundTimelineImg})`,
-          backgroundPosition: 'center 50%'
-        }}
+        className={`absolute inset-0 bg-gradient-to-br ${theme.background.primary}`}
       />
 
-      {/* Semi-transparent blue overlay to blend with image */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-900/80 via-blue-700/70 to-cyan-600/60" />
+      {/* Subtle pattern overlay - reduced opacity */}
+      <div
+        className={`absolute inset-0 bg-gradient-to-t ${theme.background.overlay}`}
+      />
 
-      {/* Subtle pattern overlay for depth */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-blue-900/30" />
+      {/* Era Background Text */}
+      <EraBackground currentYear={currentYear} theme={theme} />
 
+      {/* Swipe Hint */}
+      <SwipeHint visible={showSwipeHint} />
 
-      <div className="timeline-container py-16 relative w-full h-full z-10">
-        {/* Timeline Container - geen header, geen indicatoren */}
-        <div
-          ref={timelineRef}
-          className="relative pb-32 cursor-grab active:cursor-grabbing overflow-hidden"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          style={{
-            scrollBehavior: isDragging ? "auto" : "smooth",
-            userSelect: "none",
-          }}
-        >
+      {/* Scrubber */}
+      <TimelineScrubber
+        scrollProgress={scrollProgress}
+        onScrub={handleScrub}
+        theme={theme}
+      />
+
+      {/* Studentenwerk Logo */}
+      <StudentenwerkLogo />
+
+      {/* Virtual Guide Mascot */}
+      <VirtualGuide
+        messages={[
+          "Tik op een tijdperk om meer te weten te komen!",
+          "Veeg naar links of rechts om door de geschiedenis te bladeren!",
+          "Ontdek 100 jaar Fries Landbouwmuseum!",
+        ]}
+        position="top-right"
+      />
+
+      {/* Headline */}
+      <div className="relative z-10">
+        <MuseumHeadline
+          text="100 jaar geschiedenis"
+          subtext="Fries Landbouwmuseum"
+        />
+      </div>
+
+      {/* Animated Animals - only on active timeline, not on idle screen */}
+      <AnimatedAnimals />
+
+      <div className="timeline-container py-8 md:py-16 relative w-full h-full z-10">
+        {/* Timeline Container - no header, no indicators */}
+        <div className="relative pb-32 overflow-hidden">
           <motion.div
-            className="overflow-x-auto scrollbar-hide"
+            ref={timelineRef}
+            className="overflow-x-auto scrollbar-hide cursor-grab active:cursor-grabbing"
             style={{
               scrollbarWidth: "none",
               msOverflowStyle: "none",
+              scrollBehavior: isDragging ? "auto" : "smooth",
+              userSelect: "none",
             }}
+            onScroll={handleScroll}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onDragStart={e => e.preventDefault()}
           >
-            {/* Timeline Lijn */}
-            <div className="absolute top-1/2 transform -translate-y-1/2 h-2 bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 w-full min-w-max shadow-lg shadow-blue-400/50 rounded-full">
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-300 via-blue-300 to-purple-300 blur-sm opacity-70 rounded-full"></div>
-            </div>
-
-            {/* Timeline Items */}
+            {/* Horizontal Timeline with Year Markers and Event Sections */}
             <motion.div
-              className="flex items-center space-x-16 md:space-x-32 min-w-max px-16 md:px-32 pt-16 md:pt-24 pb-16"
+              className="flex flex-row items-start gap-0 min-w-max px-16 md:px-32 pt-16 md:pt-24 pb-16 relative"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 1, ease: "easeOut" }}
             >
-              {timelineData.map((period, index) => (
-                <motion.div
-                  key={period.id}
-                  className="relative flex-shrink-0 z-10"
-                  initial={{ opacity: 0, y: 100, scale: 0.8 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{
-                    duration: 0.8,
-                    delay: index * 0.2,
-                    ease: "easeOut",
+              {/* Timeline Line - Continuous Horizontal Line - FUTURISTIC GLOW */}
+              <div className="absolute top-1/2 left-0 right-0 transform -translate-y-1/2 z-0 pointer-events-none">
+                <div className="h-1 bg-[#f3f2e9] shadow-[0_0_20px_rgba(201,163,0,0.6)] w-full relative z-10"></div>
+                <div
+                  className={`absolute top-1/2 transform -translate-y-1/2 h-6 w-full blur-md opacity-60`}
+                  style={{
+                    background: `linear-gradient(90deg, ${theme.colors.terracotta}, ${theme.colors.gold}, ${theme.colors.terracotta})`,
                   }}
+                ></div>
+              </div>
+              {timelineSections.map((section, sectionIndex) => (
+                <div
+                  key={section.markerYear}
+                  className="flex flex-col items-start min-w-[500px] md:min-w-[600px] flex-shrink-0 relative pr-16 md:pr-24"
                 >
-                  <div
-                    className={`${index % 2 === 0 ? "mb-48" : "mt-48"} w-80`}
-                  >
-                    <motion.div
-                      className="cursor-pointer"
-                      onClick={() => handleCardClick(period.id)}
-                      whileHover={{
-                        scale: 1.05,
-                        y: -8,
-                        rotateY: 5,
+                  {/* Year Marker - Large, Yellow, No Background */}
+                  <div className="sticky left-0 top-0 z-20 mb-12">
+                    <motion.span
+                      className="text-7xl md:text-8xl font-bold block whitespace-nowrap pointer-events-none font-mono"
+                      style={{
+                        color: "#c9a300",
+                        opacity: 0.6,
+                        textShadow: "0 0 30px rgba(201, 163, 0, 0.4)", // Neon glow
+                        letterSpacing: "-0.05em",
                       }}
-                      whileTap={{ scale: 0.98 }}
-                      transition={{ duration: 0.3 }}
+                      initial={{ opacity: 0, y: -30 }}
+                      animate={{ opacity: 0.6, y: 0 }}
+                      transition={{
+                        duration: 0.8,
+                        delay: sectionIndex * 0.1,
+                        ease: "easeOut",
+                      }}
                     >
-                      {/* Jaar */}
-                      <div className="text-center mb-6">
-                        <motion.div
-                          className={`text-5xl font-bold bg-gradient-to-r ${period.gradient} bg-clip-text text-transparent filter drop-shadow-lg`}
-                          initial={{ scale: 0, rotate: -180 }}
-                          animate={{ scale: 1, rotate: 0 }}
-                          transition={{ duration: 0.6, delay: index * 0.1 }}
-                          whileHover={{ scale: 1.1 }}
-                        >
-                          {period.year}
-                        </motion.div>
-                      </div>
-
-                      {/* Kaart */}
-                      <motion.div
-                        className="relative backdrop-blur-lg bg-white/20 p-8 rounded-3xl border border-white/30 overflow-hidden mb-8 shadow-xl"
-                        style={{
-                          filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.4))",
-                          background: "linear-gradient(135deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.1) 100%)"
-                        }}
-                        animate={{
-                          filter:
-                            selectedPeriod === period.id
-                              ? "drop-shadow(0 25px 50px rgba(244, 63, 94, 0.4))"
-                              : "drop-shadow(0 15px 35px rgba(0,0,0,0.3))",
-                          backgroundColor:
-                            selectedPeriod === period.id
-                              ? "rgba(244, 63, 94, 0.1)"
-                              : "rgba(255, 255, 255, 0.1)",
-                        }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <div
-                          className={`absolute inset-0 bg-gradient-to-br ${period.gradient} opacity-20`}
-                        />
-
-                        <div className="relative flex justify-center mb-6">
-                          <motion.div
-                            className="w-20 h-20 flex items-center justify-center text-4xl backdrop-blur-sm bg-white/20 rounded-2xl border border-white/30 shadow-lg"
-                            whileHover={{
-                              rotate: [0, -10, 10, -10, 0],
-                              scale: 1.1,
-                            }}
-                            transition={{ duration: 0.5 }}
-                          >
-                            🌾
-                          </motion.div>
-                        </div>
-
-                        <div className="text-center mb-4 relative">
-                          <h3
-                            className={`text-2xl font-bold bg-gradient-to-r ${period.gradient} bg-clip-text text-transparent leading-tight`}
-                          >
-                            {period.title}
-                          </h3>
-                        </div>
-
-                        <div className="text-center relative">
-                          <p className="text-gray-200 leading-relaxed">
-                            {period.description}
-                          </p>
-                        </div>
-
-                        <AnimatePresence>
-                          {selectedPeriod === period.id && (
-                            <motion.div
-                              className="absolute -top-3 -right-3 w-8 h-8 bg-gradient-to-r from-pink-400 to-red-400 rounded-full flex items-center justify-center shadow-lg shadow-red-400/50"
-                              initial={{ scale: 0, rotate: -180 }}
-                              animate={{ scale: 1, rotate: 0 }}
-                              exit={{ scale: 0, rotate: 180 }}
-                              transition={{ duration: 0.3 }}
-                            >
-                              <span className="text-white text-sm font-bold">
-                                ✓
-                              </span>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </motion.div>
-                    </motion.div>
+                      {section.markerYear}
+                    </motion.span>
                   </div>
-                </motion.div>
+
+                  {/* Events in this section */}
+                  <div className="flex flex-row flex-wrap gap-8 md:gap-12 w-full py-5 relative z-10">
+                    {section.events.length > 0 ? (
+                      section.events.map((period, eventIndex) => (
+                        <motion.div
+                          key={period.id}
+                          className="relative flex-shrink-0"
+                          initial={{ opacity: 0, y: 100, scale: 0.8 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{
+                            duration: 0.8,
+                            delay: sectionIndex * 0.15 + eventIndex * 0.1,
+                            ease: "easeOut",
+                          }}
+                        >
+                          <div
+                            className={`${
+                              eventIndex % 2 === 0 ? "mb-48" : "mt-48"
+                            } relative`}
+                          >
+                            {/* Event Year Label - Modern & Clean */}
+                            <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-10">
+                              <span
+                                className="text-4xl font-bold whitespace-nowrap pointer-events-none tracking-widest font-heading"
+                                style={{
+                                  color: "#c9a300",
+                                  textShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                                }}
+                              >
+                                {formatYearRange(period.year)}
+                              </span>
+                            </div>
+
+                            <motion.div
+                              className="cursor-pointer w-[280px] min-w-[280px] max-w-[280px]"
+                              onClick={() => handleCardClick(period.id)}
+                              whileTap={{ scale: 0.98 }}
+                            >
+                              <motion.div
+                                key={period.id}
+                                className="relative flex-shrink-0"
+                                initial={{ opacity: 0, y: 100, scale: 0.8 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                transition={{
+                                  duration: 0.8,
+                                  delay: sectionIndex * 0.15 + eventIndex * 0.1,
+                                  ease: "easeOut",
+                                }}
+                              >
+                                <div
+                                  className={`${
+                                    eventIndex % 2 === 0 ? "mb-48" : "mt-48"
+                                  } relative`}
+                                >
+                                  {/* Event Year Label - Modern & Clean */}
+                                  <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-10">
+                                    <span
+                                      className="text-4xl font-bold whitespace-nowrap pointer-events-none tracking-widest font-heading"
+                                      style={{
+                                        color: "#c9a300",
+                                        textShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                                      }}
+                                    >
+                                      {formatYearRange(period.year)}
+                                    </span>
+                                  </div>
+
+                                  <motion.div
+                                    className="cursor-pointer w-[280px] min-w-[280px] max-w-[280px]"
+                                    onClick={() => handleCardClick(period.id)}
+                                    whileTap={{ scale: 0.98 }}
+                                  >
+                                    <motion.div
+                                      key={period.id}
+                                      className="relative flex-shrink-0"
+                                      initial={{
+                                        opacity: 0,
+                                        y: 100,
+                                        scale: 0.8,
+                                      }}
+                                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                                      transition={{
+                                        duration: 0.8,
+                                        delay:
+                                          sectionIndex * 0.15 +
+                                          eventIndex * 0.1,
+                                        ease: "easeOut",
+                                      }}
+                                    >
+                                      <div
+                                        className={`${
+                                          eventIndex % 2 === 0
+                                            ? "mb-48"
+                                            : "mt-48"
+                                        } relative`}
+                                      >
+                                        {/* Event Year Label - Modern & Clean */}
+                                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-10">
+                                          <span
+                                            className="text-4xl font-bold whitespace-nowrap pointer-events-none tracking-widest font-heading"
+                                            style={{
+                                              color: "#c9a300",
+                                              textShadow:
+                                                "0 2px 4px rgba(0,0,0,0.1)",
+                                            }}
+                                          >
+                                            {formatYearRange(period.year)}
+                                          </span>
+                                        </div>
+
+                                        <motion.div
+                                          className="cursor-pointer w-[280px] min-w-[280px] max-w-[280px]"
+                                          onClick={() =>
+                                            handleCardClick(period.id)
+                                          }
+                                          whileTap={{ scale: 0.98 }}
+                                        >
+                                          {/* Event Card - Typographic Museum Plaque */}
+                                          <motion.div
+                                            className={`relative bg-[#f3f2e9] rounded-xl overflow-hidden h-[420px] flex flex-col shadow-lg border-t-4 group`}
+                                            style={{
+                                              borderTopColor:
+                                                getCategoryBorderColor(
+                                                  period.category
+                                                ),
+                                              borderLeft:
+                                                "1px solid rgba(167, 184, 180, 0.3)",
+                                              borderRight:
+                                                "1px solid rgba(167, 184, 180, 0.3)",
+                                              borderBottom:
+                                                "1px solid rgba(167, 184, 180, 0.3)",
+                                            }}
+                                            animate={{
+                                              y:
+                                                selectedPeriod === period.id
+                                                  ? -10
+                                                  : 0,
+                                              boxShadow:
+                                                selectedPeriod === period.id
+                                                  ? `0 20px 40px -10px rgba(0,0,0,0.15), 0 0 0 1px ${getCategoryBorderColor(
+                                                      period.category
+                                                    )}`
+                                                  : "0 10px 30px -10px rgba(0,0,0,0.05)",
+                                            }}
+                                            whileHover={{
+                                              y: -10,
+                                              boxShadow: `0 20px 40px -10px rgba(0,0,0,0.15), 0 0 0 1px ${getCategoryBorderColor(
+                                                period.category
+                                              )}`,
+                                            }}
+                                            transition={{ duration: 0.3 }}
+                                          >
+                                            {/* Game Badge for Kids */}
+                                            {period.hasGame && (
+                                              <div className="absolute top-0 right-0 z-20">
+                                                <div
+                                                  className={`${
+                                                    period.gameType === "puzzle"
+                                                      ? "bg-[#c9a300]"
+                                                      : "bg-[#22c55e]"
+                                                  } text-white px-4 py-2 rounded-bl-2xl shadow-md flex items-center gap-2 transform transition-transform group-hover:scale-105`}
+                                                >
+                                                  <Puzzle
+                                                    size={18}
+                                                    strokeWidth={2.5}
+                                                  />
+                                                  <span className="text-xs font-bold uppercase tracking-widest">
+                                                    {period.gameType ===
+                                                    "puzzle"
+                                                      ? "Puzzle"
+                                                      : "Memory"}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {/* Background Watermark (Year) */}
+                                            <div
+                                              className="absolute -right-4 -bottom-12 text-[180px] font-bold font-heading opacity-5 pointer-events-none select-none transform -rotate-12"
+                                              style={{
+                                                color: getCategoryBorderColor(
+                                                  period.category
+                                                ),
+                                              }}
+                                            >
+                                              {extractYearUtil(period.year)}
+                                            </div>
+
+                                            {/* Card Content */}
+                                            <div className="p-8 flex flex-col h-full relative z-10">
+                                              {/* Category Label */}
+                                              <div className="mb-6">
+                                                <span
+                                                  className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest"
+                                                  style={{
+                                                    backgroundColor: `${getCategoryBorderColor(
+                                                      period.category
+                                                    )}15`,
+                                                    color:
+                                                      getCategoryBorderColor(
+                                                        period.category
+                                                      ),
+                                                  }}
+                                                >
+                                                  {period.category === "museum"
+                                                    ? "Museum"
+                                                    : period.category ===
+                                                      "maatschappelijk"
+                                                    ? "Maatschappelijk"
+                                                    : "Landbouw"}
+                                                </span>
+                                              </div>
+
+                                              {/* Title */}
+                                              <div className="mb-6">
+                                                <h3
+                                                  className="text-2xl font-bold leading-tight font-heading"
+                                                  style={{
+                                                    color: "#440f0f",
+                                                  }}
+                                                >
+                                                  {period.title}
+                                                </h3>
+                                                <div
+                                                  className="h-1 w-12 mt-4 rounded-full"
+                                                  style={{
+                                                    background:
+                                                      getCategoryBorderColor(
+                                                        period.category
+                                                      ),
+                                                  }}
+                                                />
+                                              </div>
+
+                                              {/* Description */}
+                                              <div className="flex-grow overflow-hidden relative">
+                                                <p className="leading-relaxed font-medium text-base text-[#657575] line-clamp-6">
+                                                  {period.description}
+                                                </p>
+                                                {/* Fade out effect */}
+                                                <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[#f3f2e9] to-transparent" />
+                                              </div>
+
+                                              {/* Footer / CTA */}
+                                              <div className="mt-auto pt-6 flex items-center justify-between">
+                                                <span
+                                                  className="text-sm font-bold uppercase tracking-wider flex items-center gap-2 transition-all group-hover:gap-3"
+                                                  style={{
+                                                    color: theme.colors.gold,
+                                                  }}
+                                                >
+                                                  Lees meer
+                                                  <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    width="16"
+                                                    height="16"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                  >
+                                                    <line
+                                                      x1="5"
+                                                      y1="12"
+                                                      x2="19"
+                                                      y2="12"
+                                                    ></line>
+                                                    <polyline points="12 5 19 12 12 19"></polyline>
+                                                  </svg>
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </motion.div>
+                                        </motion.div>
+                                      </div>
+                                    </motion.div>
+                                  </motion.div>
+                                </div>
+                              </motion.div>
+                            </motion.div>
+                          </div>
+                        </motion.div>
+                      ))
+                    ) : (
+                      // Empty section - minimal space placeholder
+                      <div className="w-24 h-48 opacity-0" />
+                    )}
+                  </div>
+                </div>
               ))}
             </motion.div>
+
+            {/* Fallback: If no sections, show events normally */}
+            {timelineSections.length === 0 && (
+              <motion.div
+                className="flex items-center space-x-16 md:space-x-32 min-w-max px-16 md:px-32 pt-16 md:pt-24 pb-16"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 1, ease: "easeOut" }}
+              >
+                {timelineData.map((period, index) => (
+                  <motion.div
+                    key={period.id}
+                    className="relative flex-shrink-0 z-10"
+                    initial={{ opacity: 0, y: 100, scale: 0.8 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{
+                      duration: 0.8,
+                      delay: index * 0.2,
+                      ease: "easeOut",
+                    }}
+                  >
+                    <div
+                      className={`${index % 2 === 0 ? "mb-48" : "mt-48"} w-80`}
+                    >
+                      <motion.div
+                        className="cursor-pointer"
+                        onClick={() => handleCardClick(period.id)}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        {/* Year - Animated */}
+                        <div className="text-center mb-6">
+                          <AnimatedYear
+                            year={period.year}
+                            theme={theme}
+                            gradient={period.gradient}
+                          />
+                        </div>
+
+                        {/* Event Card - Typographic Museum Plaque */}
+                        <motion.div
+                          className={`relative bg-[#f3f2e9] rounded-xl overflow-hidden h-[420px] flex flex-col shadow-lg border-t-4 group`}
+                          style={{
+                            borderTopColor: getCategoryBorderColor(
+                              period.category
+                            ),
+                            borderLeft: "1px solid rgba(167, 184, 180, 0.3)",
+                            borderRight: "1px solid rgba(167, 184, 180, 0.3)",
+                            borderBottom: "1px solid rgba(167, 184, 180, 0.3)",
+                          }}
+                          animate={{
+                            y: selectedPeriod === period.id ? -10 : 0,
+                            boxShadow:
+                              selectedPeriod === period.id
+                                ? `0 20px 40px -10px rgba(0,0,0,0.15), 0 0 0 1px ${getCategoryBorderColor(
+                                    period.category
+                                  )}`
+                                : "0 10px 30px -10px rgba(0,0,0,0.05)",
+                          }}
+                          whileHover={{
+                            y: -10,
+                            boxShadow: `0 20px 40px -10px rgba(0,0,0,0.15), 0 0 0 1px ${getCategoryBorderColor(
+                              period.category
+                            )}`,
+                          }}
+                          transition={{ duration: 0.3 }}
+                        >
+                          {/* Background Watermark (Year) */}
+                          <div
+                            className="absolute -right-4 -bottom-12 text-[180px] font-bold font-heading opacity-5 pointer-events-none select-none transform -rotate-12"
+                            style={{
+                              color: getCategoryBorderColor(period.category),
+                            }}
+                          >
+                            {extractYearUtil(period.year)}
+                          </div>
+
+                          {/* Card Content */}
+                          <div className="p-8 flex flex-col h-full relative z-10">
+                            {/* Category Label */}
+                            <div className="mb-6">
+                              <span
+                                className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest"
+                                style={{
+                                  backgroundColor: `${getCategoryBorderColor(
+                                    period.category
+                                  )}15`,
+                                  color: getCategoryBorderColor(
+                                    period.category
+                                  ),
+                                }}
+                              >
+                                {period.category === "museum"
+                                  ? "Museum"
+                                  : period.category === "maatschappelijk"
+                                  ? "Maatschappelijk"
+                                  : "Landbouw"}
+                              </span>
+                            </div>
+
+                            {/* Title */}
+                            <div className="mb-6">
+                              <h3
+                                className="text-2xl font-bold leading-tight font-heading"
+                                style={{
+                                  color: "#440f0f",
+                                }}
+                              >
+                                {period.title}
+                              </h3>
+                              <div
+                                className="h-1 w-12 mt-4 rounded-full"
+                                style={{
+                                  background: getCategoryBorderColor(
+                                    period.category
+                                  ),
+                                }}
+                              />
+                            </div>
+
+                            {/* Description */}
+                            <div className="flex-grow overflow-hidden relative">
+                              <p className="leading-relaxed font-medium text-base text-[#657575] line-clamp-6">
+                                {period.description}
+                              </p>
+                              {/* Fade out effect */}
+                              <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[#f3f2e9] to-transparent" />
+                            </div>
+
+                            {/* Footer / CTA */}
+                            <div className="mt-auto pt-6 flex items-center justify-between">
+                              <span
+                                className="text-sm font-bold uppercase tracking-wider flex items-center gap-2 transition-all group-hover:gap-3"
+                                style={{ color: theme.colors.gold }}
+                              >
+                                Lees meer
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                                  <polyline points="12 5 19 12 12 19"></polyline>
+                                </svg>
+                              </span>
+                            </div>
+                          </div>
+                        </motion.div>
+                      </motion.div>
+                    </div>
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
           </motion.div>
         </div>
       </div>
 
-      {/* Firda Logo - Bottom Left Corner */}
-      <motion.div
-        className="fixed bottom-2 left-2 z-50"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.8, delay: 1 }}
-        whileHover={{
-          scale: 1.1,
-          rotate: [0, -5, 5, -5, 0],
-          transition: { duration: 0.5 },
-        }}
-      >
-        <img
-          src="./images/firda-logo.gif"
-          alt="Firda Logo"
-          className="opacity-80 hover:opacity-100 transition-all duration-300 hover:drop-shadow-lg"
-          style={{ width: '26rem', height: 'auto' }}
-          key={logoKey}
-        />
-      </motion.div>
+      {/* Sliding detail panel disabled per request */}
 
-      {/* Swipe Hint Animation */}
+      {/* New detailed modal for enhanced timeline events */}
       <AnimatePresence>
-        {showSwipeHint && (
-          <motion.div
-            className="fixed bottom-20 right-8 z-50 flex items-center space-x-3"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 50 }}
-            transition={{ duration: 0.8 }}
-          >
-            {/* Animated finger icon */}
-            <motion.div
-              className="relative"
-              animate={{
-                x: [0, -30, 0],
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-            >
-              <div className="text-6xl">👆</div>
-              {/* Swipe trail effect */}
-              <motion.div
-                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-20 h-2 bg-gradient-to-r from-cyan-400 to-transparent rounded-full opacity-70"
-                animate={{
-                  x: [30, -50, 30],
-                  opacity: [0, 1, 0],
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-              />
-            </motion.div>
-
-            {/* Text hint */}
-            <motion.div
-              className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-xl shadow-lg border border-white/30"
-              initial={{ scale: 0.8 }}
-              animate={{ scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-            >
-              <p className="text-gray-800 font-medium text-lg">
-                Veeg met je vinger →
-              </p>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Timeline Modal */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <TimelineModal
-            isOpen={isModalOpen}
-            onClose={closeModal}
-            timelineItem={selectedTimelineItem}
+        {isDetailModalOpen && (
+          <TimelineDetailModal
+            isOpen={isDetailModalOpen}
+            onClose={closeDetailModal}
+            eventData={selectedTimelineItem}
           />
         )}
       </AnimatePresence>

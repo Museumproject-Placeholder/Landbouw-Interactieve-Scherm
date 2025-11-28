@@ -1,57 +1,214 @@
-# Museum Landbouw Project
-# Stack
-React + Vite + TailwindCSS + PostCSS (?)
+# Fries Landbouwmuseum - Interactive Timeline App
 
-# Prerequisites
-- nodejs (v22.19.0) met npm
-- VSCode (ES7+ React/Redux/React-Native snippets, Tailwind CSS IntelliSense, Auto Rename Tag)
-- Git or Git Desktop [guide](github_desktop_ssh_setup.md)
+Interactieve tijdlijn applicatie voor het Fries Landbouwmuseum in Leeuwarden (Nederland) ter gelegenheid van het 100-jarig jubileum (1925-2025). De applicatie draait op een touchscreen kiosk in het museum en laat bezoekers de geschiedenis van het museum op een interactieve manier verkennen.
 
+## 📱 Over het Project
 
+Een interactief touchscreen applicatie die bezoekers door 100 jaar geschiedenis van het Fries Landbouwmuseum leidt. De applicatie is speciaal ontworpen voor gebruik op touchscreen kiosk (1920x1080 resolutie) en bevat rijke historische content, interactieve elementen, en educatieve features.
 
-# Setup (Required only once)
-1. Create a fork of this repository (Through github)
-2. Clone your fork to your local machine
+## 🚀 Features
+
+- **Interactieve Timeline** - Horizontale scrollbare tijdlijn met 9 historische periodes
+- **Twee Thema's** - Modern (blauw/cyaan) en Museum (aarde tinten)
+- **Touch Optimized** - Volledig geoptimaliseerd voor touchscreen displays
+- **Puzzelspel** - 3x3 schuifpuzzel met meerdere afbeeldingen
+- **Detail Modals** - Rijke content met foto galleries, video's, en historische context
+- **Responsive Design** - Werkt op desktop, tablet, en grote touchscreens
+
+## 📁 Project Structuur
+
+```
+Landbouw-Interactieve-Scherm/
+├── frontend/                    # React + Vite applicatie
+│   ├── src/
+│   │   ├── components/         # React componenten
+│   │   │   ├── Timeline/       # Timeline gerelateerde componenten
+│   │   │   ├── PuzzleGame/     # Puzzelspel componenten
+│   │   │   └── Common/         # Gedeelde componenten
+│   │   ├── config/             # Configuratie (thema's, galleries)
+│   │   ├── assets/             # Afbeeldingen, fonts
+│   │   └── styles/             # Global CSS
+│   ├── public/                 # Statische bestanden
+│   └── dist/                   # Build output (niet in git)
+├── backend/                     # PHP REST API + Admin Panel
+│   ├── api/                    # REST API endpoints
+│   │   ├── config/             # Database configuratie
+│   │   ├── endpoints/          # API endpoints
+│   │   └── index.php           # API router
+│   ├── adminpanel/             # Admin panel (PHP/HTML/JS)
+│   │   ├── includes/           # PHP includes
+│   │   ├── assets/             # CSS, uploads
+│   │   └── *.php               # Admin panel pagina's
+│   └── .htaccess               # Apache configuratie
+├── docs/                        # Project documentatie
+└── README.md                    # Dit bestand
+```
+
+## 🛠️ Technologie Stack
+
+**Frontend:**
+
+- React.js 18
+- Vite (build tool)
+- Framer Motion (animaties)
+- Tailwind CSS (styling)
+- React Router (routing)
+- Lucide React (icons)
+- Yet Another React Lightbox (gallery)
+
+**Backend:**
+
+- MySQL Database (timeline_events tabel)
+- PHP REST API
+- Admin Panel voor content beheer (PHP/HTML/JS)
+
+**Deployment:**
+
+- Touchscreen kiosk (1920x1080 resolutie)
+- Production build via Vite
+- Static file hosting
+
+## 📦 Installatie & Setup
+
+### Prerequisites
+
+- Node.js (v22.19.0) met npm
+- VSCode (aanbevolen extensions: ES7+ React/Redux snippets, Tailwind CSS IntelliSense)
+- Git of GitHub Desktop
+
+### Frontend Setup
+
 ```bash
-git clone git@github.com:YOURNAME/Landbouw-Interactieve-Scherm.git or with https https://github.com/YOURNAME/Landbouw-Interactieve-Scherm.git
-
+# Clone repository
+git clone https://github.com/YOURNAME/Landbouw-Interactieve-Scherm.git
 cd Landbouw-Interactieve-Scherm
 
-cd frontend/
+# Installeer dependencies
+cd frontend
+npm install
 
-npm install (Installs Tailwind etc)
-
+# Start development server
 npm run dev
 ```
-# How to create a PR
-1. Update your fork on GitHub
-<img width="926" height="262" alt="image" src="https://github.com/user-attachments/assets/a5e95d68-d60b-482f-8fa1-7c8436b51935"/>
 
-2. Update your local clone
-```bash
-git checkout master; git pull
-```
-3. Create a new branch
-Always make sure you are on master branch before creating a new branch by typing:
-```bash
- git checkout master
-```
-Create a new branch giving it a name befitting of the changes made/added.
-```bash
-git checkout -b remove-scrollbar
-```
-4. Add your changes
-```bash
-git add index.hmtl styles.css 
-```
-You can use the git status command to check which files have been selected to be committed
+De applicatie draait op `http://localhost:5173`
 
-5. Commit & Push your changes
-```bash
-git commit -m "Remove scrollbar from index.html and add style.css"
+### Build voor Productie
 
-git push --set-upstream origin remove-scrollbar
+```bash
+cd frontend
+npm run build
 ```
-6. Open the PR
-Go to the main repo https://github.com/Museumproject-Placeholder/Landbouw-Interactieve-Scherm/tree/main  you will notice that GitHub is smart enough to realize that you are about to open a PR and shows this nice box:
-<img width="1039" height="499" alt="image" src="https://github.com/user-attachments/assets/f5bb5535-4dbd-4411-9d43-cb7cf70a28c4" />
+
+Output staat in `frontend/dist/`
+
+## 🎨 Thema's
+
+Het project heeft twee thema's:
+
+**Modern Theme (default):**
+
+- Kleuren: Blauw, Cyaan, Paars
+- Modern UI design
+- Gradient effecten
+
+**Museum Theme:**
+
+- Kleuren: Roest, Amber, Olijf, Maroon
+- Warme, aarde tinten
+- Klassiek museum gevoel
+
+Wissel tussen thema's via de knop rechtsboven.
+
+## 📊 Database Schema
+
+De applicatie gebruikt een MySQL database met de volgende structuur:
+
+```sql
+timeline_events
+├── id (INT)
+├── year (VARCHAR)
+├── title (VARCHAR)
+├── description (TEXT)
+├── icon (VARCHAR)
+├── gradient (VARCHAR)
+├── museum_gradient (VARCHAR)
+├── stage (INT)
+├── has_puzzle (BOOLEAN)
+├── puzzle_image_url (VARCHAR)
+├── use_detailed_modal (BOOLEAN)
+├── historical_context (TEXT)
+├── sort_order (INT)
+├── is_active (BOOLEAN)
+├── created_at (TIMESTAMP)
+└── updated_at (TIMESTAMP)
+```
+
+Zie `DATABASE_USER_STORY.md` voor volledige setup instructies.
+
+## 🔄 Git Workflow
+
+### Branch maken en PR openen
+
+```bash
+# Update je lokale clone
+git checkout main
+git pull
+
+# Maak nieuwe branch
+git checkout -b feature/jouw-feature-naam
+
+# Maak je changes...
+
+# Add en commit
+git add .
+git commit -m "Beschrijving van je changes"
+
+# Push naar GitHub
+git push --set-upstream origin feature/jouw-feature-naam
+
+# Open PR op GitHub
+```
+
+## 🔮 Roadmap
+
+- [x] REST API backend
+- [x] Admin panel voor content beheer
+- [ ] Audio guide integratie
+- [ ] Video content support
+- [ ] Multi-language support (NL/EN/FY)
+- [ ] Analytics & statistics
+
+## 📝 Documentatie
+
+Alle documentatie is georganiseerd in de `/docs` directory:
+
+- **Frontend documentatie**: `/docs/frontend/`
+
+  - `THEME_SYSTEM_DOCUMENTATION.md` - Thema systeem uitleg
+  - `ANIMATION_GUIDE.md` - Animatie implementatie
+  - `GALLERY_SYSTEM_GUIDE.md` - Gallery systeem
+  - `VIRTUAL_GUIDE_DOCUMENTATION.md` - Virtual guide mascot
+  - `TIMELINE_IMPROVEMENTS.md` - Timeline verbeteringen
+  - `TIMELINE_COMPONENT_README.md` - Timeline component structuur
+  - `MUSEUM_COLORS_MAP.md` - Museum kleuren referentie
+  - `QUICK_THEME_TEST.md` - Quick reference voor thema testing
+
+- **Project documentatie**: `/docs/`
+  - `ADMIN_PANEL_USER_STORY.md` - Admin panel specificaties
+  - `DATABASE_USER_STORY.md` - Database setup guide
+
+Zie [docs/README.md](docs/README.md) voor volledige documentatie index.
+
+## 👥 Team
+
+- **Frontend Development:** Lukasz
+- **Database Design:** Database Developer
+- **Admin Panel Design:** Junior Lee
+- **Content:** Fries Landbouwmuseum
+
+## 📄 Licentie
+
+Proprietary - Fries Landbouwmuseum © 2025
+
+---

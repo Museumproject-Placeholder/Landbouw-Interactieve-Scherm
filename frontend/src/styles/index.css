@@ -7,10 +7,34 @@
 
 @layer base {
   html {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Montserrat', sans-serif;
     scroll-behavior: smooth;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    /* Prevent overscroll bounce on touch devices */
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+    /* Allow scrolling but prevent bounce */
+    height: 100%;
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Museum fonts - headings use Josefin Sans */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Josefin Sans', sans-serif;
+  }
+
+  /* Buttons use Josefin Sans */
+  button {
+    font-family: 'Josefin Sans', sans-serif;
   }
 
   html::-webkit-scrollbar {
@@ -20,13 +44,23 @@
   body {
     @apply bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 text-white;
     overflow-x: hidden;
+    overflow-y: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
     /* Optimize for touch interfaces */
-    touch-action: manipulation;
+    touch-action: pan-y;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
+    /* Prevent pull-to-refresh and overscroll */
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+    -webkit-overflow-scrolling: touch;
+    /* Allow scrolling but prevent bounce */
+    width: 100%;
+    min-height: 100%;
+    position: relative;
   }
 
   body::-webkit-scrollbar {
@@ -37,17 +71,52 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Root container - allow scrolling but prevent bounce */
+  #root {
+    width: 100%;
+    min-height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+    position: relative;
+  }
+
+  /* App container - allow scrolling but prevent bounce */
+  .App {
+    width: 100%;
+    min-height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+    position: relative;
+  }
+
+  /* Main content area */
+  main {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+    position: relative;
+  }
 }
 
 @layer components {
 
   /* Touch-optimized buttons for kiosk interface */
   .btn-primary {
-    @apply px-10 py-5 bg-gradient-to-r from-cyan-400 to-blue-400 text-white rounded-3xl font-bold text-lg hover:from-cyan-500 hover:to-blue-500 active:scale-95 transition-all duration-200 transform focus:ring-4 focus:ring-cyan-400/50 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-xl shadow-cyan-400/30 min-h-[60px] min-w-[160px] cursor-pointer select-none;
+    @apply px-10 py-5 bg-theme-primary text-white rounded-3xl font-bold text-lg font-heading hover:bg-brand-amber active:scale-95 transition-all duration-200 transform focus:ring-4 focus:ring-brand-gold/50 focus:ring-offset-2 focus:ring-offset-brand-linen shadow-xl min-h-[60px] min-w-[160px] cursor-pointer select-none;
   }
 
   .btn-secondary {
-    @apply px-10 py-5 backdrop-blur-xl bg-white/10 text-white border-2 border-white/20 rounded-3xl font-bold text-lg hover:bg-white/20 hover:text-white active:scale-95 transition-all duration-200 transform focus:ring-4 focus:ring-white/50 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-xl min-h-[60px] min-w-[160px] cursor-pointer select-none;
+    @apply px-10 py-5 backdrop-blur-xl bg-white/10 text-white border-2 border-white/20 rounded-3xl font-bold text-lg font-heading hover:bg-white/20 hover:text-white active:scale-95 transition-all duration-200 transform focus:ring-4 focus:ring-white/50 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-xl min-h-[60px] min-w-[160px] cursor-pointer select-none;
   }
 
   .timeline-card {
@@ -217,5 +286,108 @@
     font-size: 2.5rem;
     line-height: 1.2;
     font-weight: 800;
+  }
+
+  /* Puzzle carousel touch optimization */
+  .puzzle-carousel {
+    touch-action: pan-x pan-y;
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    /* Prevent scroll snap from interfering with touch scrolling */
+    scroll-snap-type: x mandatory;
+  }
+
+  .puzzle-carousel::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Prevent pull-to-refresh on touch devices */
+  .no-pull-refresh {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Leaflet Map Custom Styles */
+  .custom-marker {
+    background: transparent;
+    border: none;
+  }
+
+  .leaflet-popup-content-wrapper {
+    border-radius: 12px;
+    padding: 0;
+  }
+
+  .leaflet-popup-content {
+    margin: 0;
+  }
+
+  .leaflet-container {
+    touch-action: none !important;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+  }
+
+  .leaflet-container * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .leaflet-control-attribution {
+    display: none !important;
+  }
+
+  .leaflet-touch .leaflet-control-layers,
+  .leaflet-touch .leaflet-bar {
+    border: 1px solid rgba(148, 163, 184, 0.3) !important;
+  }
+
+  .leaflet-control-zoom a {
+    width: 40px !important;
+    height: 40px !important;
+    line-height: 40px !important;
+    font-size: 20px !important;
+    border-radius: 8px !important;
+    background: rgba(30, 41, 59, 0.9) !important;
+    color: white !important;
+    border: 1px solid rgba(148, 163, 184, 0.3) !important;
+  }
+
+  .leaflet-control-zoom a:hover {
+    background: rgba(51, 65, 85, 0.9) !important;
+  }
+
+  .leaflet-control-attribution {
+    font-size: 10px !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    color: white !important;
+    border-radius: 4px !important;
+    padding: 2px 6px !important;
+  }
+
+  .leaflet-control-attribution a {
+    color: #93c5fd !important;
+  }
+
+  /* Enable touch dragging on map */
+  .leaflet-grab {
+    cursor: grab !important;
+  }
+
+  .leaflet-dragging .leaflet-grab {
+    cursor: grabbing !important;
+  }
+
+  /* Prevent issues with touch events */
+  .leaflet-tile-container {
+    pointer-events: none;
+  }
+
+  .leaflet-marker-icon,
+  .leaflet-popup {
+    pointer-events: auto;
   }
 }
